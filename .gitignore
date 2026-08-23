@@ -6,3 +6,4 @@ xsim.dir/
 sim/work/
 webtalk*
 vivado/build/
+.Xil/
