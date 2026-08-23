@@ -419,8 +419,8 @@ initial begin
     //--------- pattern reading end -----------
     #1;
 
-    $readmemh("C:/Users/LCP/Desktop/Edu/pat/rearrange.dat", input_mem);
-    $readmemh("C:/Users/LCP/Desktop/Edu/pat/output.dat"   , golden_output);
+    $readmemh({`PAT_DIR, "rearrange.dat"}, input_mem);
+    $readmemh({`PAT_DIR, "output.dat"}   , golden_output);
 
     total_group = 0;
     while (input_mem[total_group*BEATS_PER_GROUP] !== {DATA_W{1'bx}} && total_group < 512)

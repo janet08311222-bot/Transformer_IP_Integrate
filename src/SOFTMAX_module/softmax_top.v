@@ -46,7 +46,7 @@ reg [31:0] accumulator;
 reg [2:0] acc_cnt;
 reg [2:0] col_cnt;
 reg [15:0] exp_ary [0:63];
-reg [5:0] out_cnt;
+reg [6:0] out_cnt;
 reg div_cnt;
 reg idle_cnt;
 
@@ -79,6 +79,7 @@ wire [1:0] max_cnt;
 
 integer i;
 
+parameter DIV_STAGES = 6;
 parameter IDLE = 0;
 parameter LOAD = 1;
 parameter MAX = 2;
@@ -87,8 +88,12 @@ parameter EXP = 4;
 parameter ACC = 5;
 parameter DIV = 6;
 parameter RES = 7;
+parameter WAIT_DIV = 8;
 
-assign osif_last_din_w = ((state == DIV) && (out_cnt == 63) && (div_cnt == 1))? 1 : 0;
+reg [DIV_STAGES-1:0] div_valid_pipe;
+reg [6:0] out_collected_cnt;
+
+assign osif_last_din_w = ((state == DIV) && (out_collected_cnt == 63) && out_ready && div_valid_pipe[DIV_STAGES-2])? 1 : 0;
 assign softmax_done  = osif_last_din;
 
 always @(posedge clk) begin
@@ -116,8 +121,9 @@ always @(*) begin
         MAX: next_state = ((max_cnt == 3) && (col_cnt == 7))? SHIFT : (max_cnt == 3)? IDLE :MAX;
         SHIFT: next_state = EXP;
         EXP: next_state = (exp_valid_out0 == 1)? ACC : EXP;
-        ACC: next_state = ((acc_cnt == 3'd3) && (col_cnt == 7))? DIV : (acc_cnt == 3'd3)? SHIFT : ACC;
-        DIV: next_state = ((out_cnt == 63) && (div_cnt == 1))? RES : DIV;
+        ACC: next_state = ((acc_cnt == 3'd3) && (col_cnt == 7))? WAIT_DIV : (acc_cnt == 3'd3)? SHIFT : ACC;
+        WAIT_DIV: next_state = DIV;
+        DIV: next_state = ((out_collected_cnt == 63) && out_ready && div_valid_pipe[DIV_STAGES-2]) ? RES : DIV;
         RES: next_state = IDLE;
         default:next_state = IDLE;
     endcase
@@ -300,24 +306,67 @@ always @(posedge clk) begin
     end
 end
 
-assign dividend = ((state == DIV) && (div_cnt == 0))? (exp_ary[out_cnt] << 8) : dividend;
-assign divisor = accumulator;
+wire [22:0] dividend_in = (out_cnt < 64) ? (exp_ary[out_cnt[5:0]] << 8) : 23'd0;
+// ----- 倒數乘法器取代除法器 -----
+wire [4:0] p;
+assign p = (accumulator[31]) ? 5'd31 : (accumulator[30]) ? 5'd30 : (accumulator[29]) ? 5'd29 : (accumulator[28]) ? 5'd28 :
+           (accumulator[27]) ? 5'd27 : (accumulator[26]) ? 5'd26 : (accumulator[25]) ? 5'd25 : (accumulator[24]) ? 5'd24 :
+           (accumulator[23]) ? 5'd23 : (accumulator[22]) ? 5'd22 : (accumulator[21]) ? 5'd21 : (accumulator[20]) ? 5'd20 :
+           (accumulator[19]) ? 5'd19 : (accumulator[18]) ? 5'd18 : (accumulator[17]) ? 5'd17 : (accumulator[16]) ? 5'd16 :
+           (accumulator[15]) ? 5'd15 : (accumulator[14]) ? 5'd14 : (accumulator[13]) ? 5'd13 : (accumulator[12]) ? 5'd12 :
+           (accumulator[11]) ? 5'd11 : (accumulator[10]) ? 5'd10 : (accumulator[9])  ? 5'd9  : (accumulator[8])  ? 5'd8  :
+           (accumulator[7])  ? 5'd7  : (accumulator[6])  ? 5'd6  : (accumulator[5])  ? 5'd5  : (accumulator[4])  ? 5'd4  :
+           (accumulator[3])  ? 5'd3  : (accumulator[2])  ? 5'd2  : (accumulator[1])  ? 5'd1  : 5'd0;
 
-//assign quotient = dividend / divisor;
+wire [8:0] M;
+assign M = (p >= 5'd8) ? (accumulator >> (p - 5'd8)) : (accumulator << (5'd8 - p));
 
-//DW_div  #(.a_width(23), .b_width(32), .tc_mode(1), .rem_mode(1))
-//        div(.a(dividend), .b(accumulator), .quotient(quotient), .remainder(remainder), .divide_by_0(divide_by_0));
+wire [17:0] R;
+recip_lut r_lut (
+    .clk(clk),
+    .index(M[7:0]),
+    .recip(R)
+);
 
-assign quotient = dividend/accumulator;
-assign remainder = dividend%accumulator;
+wire [40:0] product;
+DW_mult_pipe #(
+    .a_width(23), 
+    .b_width(18), 
+    .num_stages(DIV_STAGES), 
+    .stall_mode(1), 
+    .rst_mode(1), 
+    .op_iso_mode(0)
+) mult_recip_inst (
+    .clk(clk), 
+    .rst_n(~rst), 
+    .en(out_ready && (state == DIV)), 
+    .tc(1'b0), 
+    .a(dividend_in), 
+    .b(R), 
+    .product(product)
+);
 
-//DW_div_pipe #(.inst_a_width(), .inst_b_width(), .inst_tc_mode(), .inst_rem_mode(), 
-//                .inst_num_stages(), .inst_stall_mode(), .inst_rst_mode(), .inst_op_iso_mode())
-//                div(.clk(), .rst_n(), .en(), .a(), .b(), ..quotient(), .reminder(), .divide_by_0());
+integer j;
+reg [4:0] p_pipe [0:DIV_STAGES-1];
+always @(posedge clk) begin
+    if (rst) begin
+        for (j = 0; j < DIV_STAGES; j = j + 1) begin
+            p_pipe[j] <= 0;
+        end
+    end else if (out_ready && (state == DIV)) begin
+        p_pipe[0] <= p;
+        for (j = 1; j < DIV_STAGES; j = j + 1) begin
+            p_pipe[j] <= p_pipe[j-1];
+        end
+    end
+end
 
+wire [5:0] shift_amount = p_pipe[DIV_STAGES-2] + 6'd17;
+assign quotient = product >> shift_amount;
+// --------------------------------
 
-assign soft_out_w = ((state == DIV) && (div_cnt == 1) && (out_ready == 1))? quotient : SOFT_OUT;
-assign valid_out_w = ((state == DIV) && (div_cnt == 1) && (out_ready == 1))? 1 : 0;
+assign soft_out_w = ((state == DIV) && out_ready && div_valid_pipe[DIV_STAGES-2]) ? quotient : SOFT_OUT;
+assign valid_out_w = ((state == DIV) && out_ready && div_valid_pipe[DIV_STAGES-2]) ? 1 : 0;
 
 always @(posedge clk) begin
     if (rst) begin
@@ -389,17 +438,26 @@ always @(posedge clk) begin
     if (rst) begin
         div_cnt <= 0;
         out_cnt <= 0;
+        div_valid_pipe <= 0;
+        out_collected_cnt <= 0;
     end
-    else if ((state == DIV) && (div_cnt == 0) && (out_ready == 1)) begin
-        div_cnt <= div_cnt + 1;
-        out_cnt <= out_cnt;
-    end
-    else if ((state == DIV) && (div_cnt == 1) && (out_ready == 1)) begin
-        div_cnt <= 0;
-        out_cnt <= out_cnt + 1;
+    else if (state == DIV) begin
+        if (out_ready) begin
+            if (out_cnt < 64) begin
+                out_cnt <= out_cnt + 1;
+            end
+            div_valid_pipe <= {div_valid_pipe[DIV_STAGES-2:0], (out_cnt < 64)};
+            
+            if (div_valid_pipe[DIV_STAGES-2]) begin
+                out_collected_cnt <= out_collected_cnt + 1;
+            end
+        end
     end
     else begin
-        div_cnt <= div_cnt;
+        div_cnt <= 0;
+        out_cnt <= 0;
+        div_valid_pipe <= 0;
+        out_collected_cnt <= 0;
     end
 end
 

@@ -1,6 +1,7 @@
 src/common_module/counter/count_yi_v3.v
 src/common_module/counter/count_yi_v4.v
 src/common_module/counter/count_yi_v5.v
+src/common_module/DW_mult_pipe_fpga.v
 src/common_module/fifo/INPUT_STREAM_if.v
 src/common_module/fifo/OUTPUT_STREAM_if.v
 src/common_module/yolo_rst_if.v
@@ -60,6 +61,7 @@ src/FFN_module/output_module/FFN_ot_fifo.v
 src/FFN_module/output_module/FFN_ot_top.v
 src/SOFTMAX_module/exp_ln2_based.v
 src/SOFTMAX_module/pre_processor.v
+src/SOFTMAX_module/recip_lut.v
 src/SOFTMAX_module/softmax_top.v
 src/Add_Norm_module/add.v
 src/Add_Norm_module/addnormtop.v
