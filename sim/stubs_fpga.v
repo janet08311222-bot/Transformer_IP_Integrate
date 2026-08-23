@@ -9,8 +9,8 @@
 //  Port lists match the instantiations in the *_top.v FPGA path.
 // ============================================================================
 
-//----    FFN block memories    -----
-module BRAM_IF (
+//----    FFN block memories (FFN_-prefixed: SA has its own BRAM_* with different geometry)    -----
+module FFN_BRAM_IF (
     input        clka, input ena, input wea,
     input  [8:0] addra, input [63:0] dina, output [63:0] douta
 );
@@ -23,7 +23,7 @@ module BRAM_IF (
     assign douta = q;
 endmodule
 
-module BRAM_BIAS (
+module FFN_BRAM_BIAS (
     input        clka, input ena, input wea,
     input  [8:0] addra, input [31:0] dina, output [31:0] douta
 );
@@ -36,7 +36,7 @@ module BRAM_BIAS (
     assign douta = q;
 endmodule
 
-module BRAM_OT (
+module FFN_BRAM_OT (
     input        clka, input ena, input wea,
     input  [8:0] addra, input [63:0] dina, output [63:0] douta
 );
@@ -49,7 +49,7 @@ module BRAM_OT (
     assign douta = q;
 endmodule
 
-module BRAM_KER (
+module FFN_BRAM_KER (
     input        clka, input clkb, input ena, input enb, input wea,
     input  [8:0] addra, input [8:0] addrb,
     input  [63:0] dina, output [63:0] doutb

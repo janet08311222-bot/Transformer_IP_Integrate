@@ -51,8 +51,7 @@ reg                	stage0_valid_in;
 reg                	stage1_valid_in;
 reg                	stage2_valid_in;
 reg                	stage3_valid_in;
-reg                	stage4_valid_in;
-reg                	stage5_valid_in;
+// stage4_valid_in / stage5_valid_in : tail of the valid chain, never read
 
 //operation
 
@@ -67,7 +66,8 @@ always@( posedge clk )begin
 	end
 	else if(valid_in) begin
 		act_zofw_reg <= act_sum_in * z_of_weight;	//放進訊號線再計算會多等一個CLK
-		serial32_reg <= serial32_in;
+		// act_sum（所有 activation 的和）× kernel 的零點 zw
+		serial32_reg <= serial32_in;   // MAC+Bias 的 32-bit 值
 		m0_scale_reg <= m0_scale;
 		index_reg <= index;
 	end
@@ -86,6 +86,8 @@ always@( posedge clk )begin
 	end
 	else begin
 		bfm0_reg <= serial32_reg - act_zofw_reg;
+		// MAC+Bias 結果 - act×z_ker 的修正項
+		// 這就是「量化後的真實卷積輸出 y」
 	end
 end
 
@@ -109,10 +111,10 @@ end
 
 always@(*)begin
 	if( bfm0_reg >= 1 )begin
-		s_reg = 1 << (31 + index_reg);
+		s_reg = 1 << (31 + index_reg);   // 正數舍入常數
 	end 
 	else if( bfm0_reg < 1 )begin
-		s_reg = -1 << (31 + index_reg);
+		s_reg = -1 << (31 + index_reg);  // 負數舍入常數
 	end
 	else begin
 		s_reg = 'd0;
@@ -136,6 +138,7 @@ always@( posedge clk )begin
 	end
 	else begin
 		after_m0_reg <= m0_scale_reg * bfm0_reg;
+		// 乘以縮放因子 m0，m0 是一個 Q31 格式的定點數
 	end
 end
 
@@ -144,12 +147,14 @@ always@( posedge clk) begin
     if(reset) saturatingrounding <= 0;
 
     else      saturatingrounding <= (after_m0_reg + s_reg_1) >>> (31+index_reg);
+			// 加上舍入修正常數後，算術右移 (31 + index) bit
+			// 把 Q31 的定點結果換算回整數域
 end
 
 always@(*)
 begin
-    if(saturatingrounding>255)     	q_out = 255;
-    else if (saturatingrounding<0) 	q_out = 0;
+    if(saturatingrounding>255)     	q_out = 255;  // 飽和至最大值
+    else if (saturatingrounding<0) 	q_out = 0;   // 飽和至 0
     else                  	   		q_out = saturatingrounding[7:0];
 end
 
@@ -158,7 +163,6 @@ always@( posedge clk )begin
 	stage1_valid_in <= stage0_valid_in;
 	stage2_valid_in <= stage1_valid_in;
 	stage3_valid_in <= stage2_valid_in;
-	stage4_valid_in <= stage3_valid_in;
 //	stage5_valid_in <= stage4_valid_in;
 end
 

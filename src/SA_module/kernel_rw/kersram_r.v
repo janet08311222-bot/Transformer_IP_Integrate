@@ -130,7 +130,7 @@ input wire [3-1:0]	if_r_state	;
 
 
 wire 	[STARTER_BITS-1:0]	cfg_top_starter		[0:4];
-wire 	[PADLEN_BITS-1:0] 	cfg_botpad_length	[0:4];
+// cfg_botpad_length[0:4] was unpacked from cfgin_botpad_length and never read
 wire 	[PADLEN_BITS-1:0]	cfg_toppad_length	[0:4];
 
 localparam [2:0] 
@@ -169,11 +169,10 @@ wire						cnt_once_cp_last	;
 
 wire	[ADDR_CNT_BITS-1:0]	cnt_colout			;
 wire	[ADDR_CNT_BITS-1:0]	cnt_colout_final	;
-wire						cnt_colout_last		;
 
 wire	[BUF_TAG_BITS-1 : 0 ]	cnt_ker			;
 wire	[BUF_TAG_BITS-1 : 0 ]	cnt_ker_final	;
-wire							cnt_ker_last	;
+// cnt_colout_last / cnt_ker_last : counter .last taps nobody reads -- left open
 
 reg		[ADDR_CNT_BITS-1:0] sram_address   ;	// sram address
 reg		[ADDR_CNT_BITS  :0] once_cp_cycle	;	// end of cp cycle and shifter
@@ -185,11 +184,13 @@ reg cen_dly0,cen_dly1,cen_dly2,cen_dly3,cen_dly4,cen_dly5,cen_dly6,cen_dly7;
 // reg wen_dly0 , wen_dly1 , wen_dly2 , wen_dly3 , wen_dly4 , wen_dly5 , wen_dly6 , wen_dly7 ;
 reg [ ADDR_CNT_BITS-1 : 0 ] addr_sr_dly0 , addr_sr_dly1 , addr_sr_dly2 , addr_sr_dly3 , addr_sr_dly4 , addr_sr_dly5 , addr_sr_dly6 , addr_sr_dly7 ;
 reg ker_read_busy_dly0 , ker_read_busy_dly1 , ker_read_busy_dly2 , ker_read_busy_dly3 , ker_read_busy_dly4 , ker_read_busy_dly5 , ker_read_busy_dly6 , ker_read_busy_dly7 ;
-reg valid_dly0 , valid_dly1 , valid_dly2 , valid_dly3 , valid_dly4 , valid_dly5 , valid_dly6 , valid_dly7 , valid_dly8 , valid_dly9;
-reg final_dly0 , final_dly1 , final_dly2 , final_dly3 , final_dly4 , final_dly5 , final_dly6 , final_dly7 , final_dly8 , final_dly9;
+// valid_dly9 / final_dly9 were the tail of each chain and nothing read them.
+// The whole cnt_once_cp_dly0..3 chain is gone too -- its only readers were the
+// commented-out final_check variants further down.
+reg valid_dly0 , valid_dly1 , valid_dly2 , valid_dly3 , valid_dly4 , valid_dly5 , valid_dly6 , valid_dly7 , valid_dly8 ;
+reg final_dly0 , final_dly1 , final_dly2 , final_dly3 , final_dly4 , final_dly5 , final_dly6 , final_dly7 , final_dly8 ;
 wire valid_check ;
 wire final_check ;
-reg [9:0] cnt_once_cp_dly0 , cnt_once_cp_dly1 , cnt_once_cp_dly2 , cnt_once_cp_dly3 ;
 
 
 //==============================================================================
@@ -199,7 +200,6 @@ genvar iv0;
 generate
 for(iv0 = 0;iv0 < 5; iv0 = iv0 + 1) begin : ASSIGN_GEN
     assign cfg_top_starter[iv0] = cfgin_top_starter[		(STARTER_BITS*(5-iv0)-1)	-: STARTER_BITS];
-    assign cfg_botpad_length[iv0] = cfgin_botpad_length[	(PADLEN_BITS*(5-iv0)	-1)	-: PADLEN_BITS];
     assign cfg_toppad_length[iv0] = cfgin_toppad_length[	(PADLEN_BITS*(5-iv0)	-1)	-: PADLEN_BITS];
 end
 endgenerate
@@ -289,16 +289,9 @@ reg [2-1 : 0 ] row_pad_condi 	;	// row level padding condition
 reg padding_done ;
 reg nor_read_done ;
 
-reg [ 10-1 : 0 ] pdad_top_array [ 0 : 5-1 ];	// config for top 
-reg [ 10-1 : 0 ] pdad_bot_array [ 0 : 5-1 ];	// config for bottom 
-
-
-
-reg [ 4-1 : 0 ] pd_start	;
-reg [ 4-1 : 0 ] pd_end		;
-// reg [ 4-1 : 0 ] pd_cnt_ad	;
-wire en_pdcho ;
-wire en_kr_over_toplength ;	//YWJ 	for ch 8 top row just caculate 6 pixel less than 8 
+// 3x3-padding leftovers, all unreferenced in the 1x1 configuration:
+//   pdad_top_array / pdad_bot_array / pd_start / pd_end / en_pdcho
+//   en_kr_over_toplength (was driven from cnt_once_cp, never read)
 
 //-----------------------------------------------------------------------------
 // config register
@@ -469,8 +462,6 @@ always @(*) begin
 	end
 end
 
-//YWJ 	for ch 8 top row just caculate 6 pixel less than 8 
-assign en_kr_over_toplength = ((cnt_once_cp > oncecpcycle_compare-1)) ? 1'd1 : 1'd0 ;
 
 
 
@@ -562,7 +553,7 @@ count_yi_v4 #(
     ,	.enable	 		(	enable_cnt_colout	)
 
 	,	.final_number	(	cnt_colout_final	)
-	,	.last			(	cnt_colout_last		)
+	,	.last			(						)
     ,	.total_q		(	cnt_colout			)
 );
 
@@ -574,7 +565,7 @@ count_yi_v4 #(
     ,	.enable	 		(	enable_ker_cnt	)
 
 	,	.final_number	(	cnt_ker_final	)
-	,	.last			(	cnt_ker_last	)
+	,	.last			(					)
     ,	.total_q		(	cnt_ker	)
 );
 
@@ -655,14 +646,6 @@ assign valid_check = enable_once_cp;
 // assign final_check = ( cnt_once_cp_dly1 == cnt_once_cp_final ) ? 1'd1 : 1'd0 ;
 assign final_check = ( cnt_once_cp_last ) ? 1'd1 : 1'd0 ;
 
-
-always @(posedge clk ) begin
-	cnt_once_cp_dly0 <= cnt_once_cp ;
-	cnt_once_cp_dly1 <= cnt_once_cp_dly0 ;
-	cnt_once_cp_dly2 <= cnt_once_cp_dly1 ;
-	cnt_once_cp_dly3 <= cnt_once_cp_dly2 ;
-end
-
 always @(posedge clk ) begin
 	valid_dly0 <= valid_check ;
 	valid_dly1 <= valid_dly0 ;
@@ -673,7 +656,6 @@ always @(posedge clk ) begin
 	valid_dly6 <= valid_dly5 ;
 	valid_dly7 <= valid_dly6 ;
 	valid_dly8 <= valid_dly7 ;
-	valid_dly9 <= valid_dly8 ;
 end
 always @(posedge clk ) begin
 	final_dly0 <= final_check ;
@@ -685,7 +667,6 @@ always @(posedge clk ) begin
 	final_dly6 <= final_dly5 ;
 	final_dly7 <= final_dly6 ;
 	final_dly8 <= final_dly7 ;
-	final_dly9 <= final_dly8 ;
 end
 
 assign valid_0 = valid_dly1 ;

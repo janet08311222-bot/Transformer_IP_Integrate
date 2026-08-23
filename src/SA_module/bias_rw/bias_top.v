@@ -24,7 +24,9 @@
 //      Redundant Columns:          0
 //      Test Muxes                  Off
 // ============================================================================
-`define FPGA_SRAM_SETTING
+`ifndef ASIC
+`define FPGA_SRAM_SETTING	// FPGA (Vivado BRAM) path ; build with +define+ASIC to use the N16 SRAM macros in sram.v
+`endif
 `define	BIG_ENDIAN
 
 

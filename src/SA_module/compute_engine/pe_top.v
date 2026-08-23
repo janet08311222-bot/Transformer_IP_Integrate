@@ -192,19 +192,19 @@ reg [8	-1:0]	rcfg_z3				;
 
 always @(posedge clk ) begin
 	if(reset)begin
-		rcfg_m0_scale 		<= 32'h4c138271	;
+		rcfg_m0_scale 		<= 32'h4c138271	;  // 預設值
 		rcfg_index 			<= 7	;
 		rcfg_z_of_weight	<= 16'd158	;
 		rcfg_z3				<= 8'd0	;
 	end
 	else begin
-		rcfg_m0_scale 		<= cfg_m0_scale 	;
+		rcfg_m0_scale 		<= cfg_m0_scale 	;  // 正常運作時用設定值
 		rcfg_index 			<= cfg_index 		;
 		rcfg_z_of_weight	<= cfg_z_of_weight	;
 		rcfg_z3				<= cfg_z3			;
 	end
 end
-
+//量化參數先寄存一拍（pipeline 對齊），reset 時給安全預設值。
 
 
 genvar i0 ;
@@ -228,7 +228,7 @@ generate
 		assign frowpe_bias[i0] 	= bias_din [i0]	;	// for first row PE bias[i] i=0~7 
 	end
 endgenerate
-
+//外部傳進來的是一條拼接好的 flat bus（例如 4×64 = 256-bit），這裡把它拆開，分配給各 PE row。輸出也同樣拼接後輸出。
 
 // for (i0 = 0; i0<PEBLKROW_NUM; i0=i0+1) begin		
 // 	assign allq_dout[(8*(PEBLKROW_NUM-i0) -1 ) -: 8 ] = q_result[i0]	;
@@ -281,9 +281,9 @@ generate
 		)pk_0 (
 			.clk ( clk )  
 			,	.reset ( reset ) 
-			,	.data8_din		(	q_result[gx]		)
+			,	.data8_din		(	q_result[gx]		)     // 量化後的 uint8
 			,	.valid8_din 	(	q_valid[gx]		)
-			,	.data64_dout	(	pkg64_result[gx]	)
+			,	.data64_dout	(	pkg64_result[gx]	)  // 打包後的 64-bit
 			,	.valid64_dout	(	pkg64_valid	[gx]	)
 					);
 	end
@@ -311,7 +311,7 @@ pe_blk64  #(    .TBITS(	64 	)     ,   .TBYTE(	8	)     ,   .BIAS_BITS(	32	)
     , .valid_din			( valid_forpe	[0]	 )
     , .final_din			( final_forpe	[0]	 )
     , .act_din			( act_forpe		[0]	 )
-    , .ker_din_0	( frowpe_ker[0]	 )
+    , .ker_din_0	( frowpe_ker[0]	 )  // 直接接外部 kernel
     , .ker_din_1	( frowpe_ker[1]	 )
     , .ker_din_2	( frowpe_ker[2]	 )
     , .ker_din_3	( frowpe_ker[3]	 )
@@ -327,7 +327,7 @@ pe_blk64  #(    .TBITS(	64 	)     ,   .TBYTE(	8	)     ,   .BIAS_BITS(	32	)
     , .bias_din_5 ( frowpe_bias[5]	)
     , .bias_din_6 ( frowpe_bias[6]	)
     , .bias_din_7 ( frowpe_bias[7]	)
-    , .pass_ker_dout_0 ( pass_ker[0][0]	 )
+    , .pass_ker_dout_0 ( pass_ker[0][0]	 )  // 傳給下一個 row
     , .pass_ker_dout_1 ( pass_ker[0][1]	 )
     , .pass_ker_dout_2 ( pass_ker[0][2]	 )
     , .pass_ker_dout_3 ( pass_ker[0][3]	 )
@@ -360,7 +360,7 @@ generate
 			, .valid_din		( valid_forpe	[pi+1]	 )
 			, .final_din		( final_forpe	[pi+1]	 )
 			, .act_din			( act_forpe		[pi+1]	 )
-			, .ker_din_0	( pass_ker[pi][0]	)
+			, .ker_din_0	( pass_ker[pi][0]	)  // 接上一個 row 傳來的 ker
 			, .ker_din_1	( pass_ker[pi][1]	)
 			, .ker_din_2	( pass_ker[pi][2]	)
 			, .ker_din_3	( pass_ker[pi][3]	)
@@ -376,7 +376,7 @@ generate
 			, .bias_din_5	( pass_bias[pi][5]	)
 			, .bias_din_6	( pass_bias[pi][6]	)
 			, .bias_din_7	( pass_bias[pi][7]	)
-			, .pass_ker_dout_0 ( pass_ker[pi+1][0]	 )
+			, .pass_ker_dout_0 ( pass_ker[pi+1][0]	 )  // 繼續往下傳
 			, .pass_ker_dout_1 ( pass_ker[pi+1][1]	 )
 			, .pass_ker_dout_2 ( pass_ker[pi+1][2]	 )
 			, .pass_ker_dout_3 ( pass_ker[pi+1][3]	 )

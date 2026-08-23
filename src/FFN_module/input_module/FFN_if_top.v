@@ -107,12 +107,12 @@ module FFN_if_top #(
         assign atl_cen_if_0 = ~cen_if_sram_0	;
         assign atl_wen_if_0 = ~wen_if_sram_0	;
 
-        BRAM_IF if_0 (.clka( clk ), .ena( atl_cen_if_0 ), .wea( atl_wen_if_0 ), .addra( addr_if_sram_0 ), .dina( din_if_sram_0 ), .douta( dout_if_sram_0 ));
+        FFN_BRAM_IF if_0 (.clka( clk ), .ena( atl_cen_if_0 ), .wea( atl_wen_if_0 ), .addra( addr_if_sram_0 ), .dina( din_if_sram_0 ), .douta( dout_if_sram_0 ));
     `else 
         assign atl_cen_if_0 = cen_if_sram_0	;
         assign atl_wen_if_0 = wen_if_sram_0	;
 
-	    IF_SRAM if_0(.Q( dout_if_sram_0 ), .CLK( clk ), .CEN( atl_cen_if_0 ), .WEN( atl_wen_if_0 ), .A( addr_if_sram_0 ), .D( din_if_sram_0 ), .EMA( 3'b0 ));
+	    FFN_IF_SRAM if_0(.Q( dout_if_sram_0 ), .CLK( clk ), .CEN( atl_cen_if_0 ), .WEN( atl_wen_if_0 ), .A( addr_if_sram_0 ), .D( din_if_sram_0 ), .EMA( 3'b0 ));
     `endif 
 
     //-------------------------------------------------------------------

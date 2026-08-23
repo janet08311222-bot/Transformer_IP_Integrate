@@ -72,7 +72,7 @@ reg signed [ 31 : 0 ] actsum_choose ;
 
 
 assign valid_in = { 
-	pe0_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],
+	pe0_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],  // 取 valid bit
 	pe1_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],
 	pe2_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],
 	pe3_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],

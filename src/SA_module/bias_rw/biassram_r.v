@@ -198,6 +198,12 @@ reg rd_first2_done ;	// for done signal !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 wire [ADDR_CNT_BITS-1:0]	cnt_inbias		;
 wire [ADDR_CNT_BITS-1:0]	cnt_ib_final	;
+// Sized version of (cfg_kernum_sub1 + 1) for rebias_cnt01's final_number port.
+// Connecting the bare expression there made it self-determine to 32 bits (the
+// literal 1 is unsized), so DC saw a 32-bit connection on a 9-bit port while the
+// other instance of the same count_yi_v4 connected 9 bits -> ELAB-369 / ELAB-327
+// and biassram_r then failed to link (LINK-5).
+wire [ADDR_CNT_BITS-1:0]	cnt_ib_kernum	;
 wire en_ib_cnt ;
 wire cnt_inbias_last	;
 wire cnt_ib_nyet ;
@@ -206,7 +212,7 @@ wire cnt_ib_nyet ;
 reg [BUF_TAG_BITS-1:0]cpker_p1;
 reg en_ib_cnt_dly0 ;
 reg en_ib_cnt_dly1 ;
-wire valid_read_data ;
+// valid_read_data (= en_ib_cnt_dly1) was assigned but never read -- dropped
 
 // ====		sram signal delay		====
 reg signed [BIAS_WORD_LENGTH-1 : 0 ] dout_biasr_0_dly0 ;
@@ -220,7 +226,7 @@ wire [ADDR_CNT_BITS-1 : 0 ]		align_srrd_addr		;
 // ====		check kernel computed number		====
 // reg [ 9 : 0 ] cp_bias_curr ;
 
-wire final_read;
+// final_read : counter .last tap, unread -- left open (final_read_number is used)
 wire [ADDR_CNT_BITS-1 : 0 ] final_read_number;
 
 // ============================================================================
@@ -382,8 +388,8 @@ count_yi_v4 #(
     ,	.reset 	 		(	reset	)
     ,	.enable	 		(	ker_read_done	)
 
-	,	.final_number	(	cfg_kernum_sub1	+1 )
-	,	.last			(	final_read		)
+	,	.final_number	(	cnt_ib_kernum	)
+	,	.last			(					)
     ,	.total_q		(	final_read_number	)
 );
 
@@ -396,6 +402,7 @@ count_yi_v4 #(
 // assign cnt_inbias_last_n = ~cnt_inbias_last ;
 
 assign cnt_ib_final = cfg_bir_rg_prep -1 ;
+assign cnt_ib_kernum = cfg_kernum_sub1 + 1'b1 ;
 assign cnt_ib_nyet = (cnt_inbias <= cnt_ib_final )? 1'd1 : 1'd0 ;
 
 assign en_ib_cnt = ( (rd_current_state== RD_FIRST_RS_1) && cnt_ib_nyet) ? 			1'd1	:	
@@ -441,7 +448,6 @@ always @(posedge clk ) begin
 end
 
 
-assign valid_read_data = en_ib_cnt_dly1 ;
 /*
 always @(posedge clk ) begin
 	en_ib_cnt_dly0 <= en_ib_cnt ;

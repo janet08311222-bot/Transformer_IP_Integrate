@@ -99,7 +99,7 @@ output wire 				valid_dout		;
 //-----------------------------------------------------------------------------
 
 //----    PE input shifter    -----
-reg	[TBITS-1:0]		act_shf		[0:7] 	;
+reg	[TBITS-1:0]		act_shf		[0:7] 	;  // 8 個 64-bit 暫存器形成 shift register
 reg 				valid_pe	[0:7] 	;
 reg 				final_pe	[0:7] 	;
 // reg	[TBITS-1:0]		ker_shf		[0:7] 	;
@@ -118,7 +118,7 @@ wire [32-1:0]	serial_actsum	;
 integer i0 ;
 
 always @(*) begin
-	act_shf[0] 		= act_din ;
+	act_shf[0] 		= act_din ;      // 第 0 個 PE 直接拿輸入
 	valid_pe[0] 	= valid_din ;
 	final_pe[0] 	= final_din ;
 end
@@ -143,13 +143,13 @@ end
 quan2uint8	q0(
 	.clk ( clk )  
 	,	.reset 	( reset ) 		
-	,	.m0_scale		(	cfg_m0_scale 		)
-	,	.index			(	cfg_index 			)
-	,	.z_of_weight	(	cfg_z_of_weight		)
+	,	.m0_scale		(	cfg_m0_scale 		)      // 量化縮放因子
+	,	.index			(	cfg_index 			)      // 縮放指數
+	,	.z_of_weight	(	cfg_z_of_weight		)   // kernel 的零點
 	,	.valid_in		(	serial_valid	)
-	,	.serial32_in	(	serial_conv		)
-	,	.act_sum_in		(	serial_actsum	)
-	,	.q_out			(	q_result_dout	)
+	,	.serial32_in	(	serial_conv		)   // 32-bit MAC+Bias 結果
+	,	.act_sum_in		(	serial_actsum	)   // act_sum（量化用）
+	,	.q_out			(	q_result_dout	)   // 量化後的 uint8 結果
 	,	.valid_out		(	valid_dout		)
 
 );
@@ -161,7 +161,7 @@ getpe_result #(
 ) gr00(
 	.clk ( clk )  
 	,	.reset ( reset ) 			
-	,	.pe0_result 		(	{	q_valid[0]	,mac_result[0]	}	)
+	,	.pe0_result 		(	{	q_valid[0]	,mac_result[0]	}	)  // 打包 valid + result
 	,	.pe1_result 		(	{	q_valid[1]	,mac_result[1]	}	)
 	,	.pe2_result 		(	{	q_valid[2]	,mac_result[2]	}	)
 	,	.pe3_result 		(	{	q_valid[3]	,mac_result[3]	}	)
@@ -178,8 +178,8 @@ getpe_result #(
 	,	.pe6_actsum 		(	act_sum[6]	)
 	,	.pe7_actsum 		(	act_sum[7]	)
 	,	.valid_out 			(	serial_valid			)
-	,	.serial_result 		(	serial_conv			)
-	,	.serial_actresult 	(	serial_actsum		)
+	,	.serial_result 		(	serial_conv			)      // 序列化後的 MAC 結果
+	,	.serial_actresult 	(	serial_actsum		)      // 序列化後的 act_sum
 
 );
 
@@ -190,8 +190,8 @@ getpe_result #(
 //----pe row0 col_0---------
 pe_8e  #(    .ELE_BITS(	8 	)     ,   .OUT_BITS(	32	)     ,   .BIAS_BITS(	32	) 
     )pe_r0_col_0(.clk ( clk )  ,    .reset ( reset ) 
-    , .act_0( act_shf[0][63-:8] )
-    , .act_1( act_shf[0][55-:8] )
+    , .act_0( act_shf[0][63-:8] )   // 64-bit 中的第 0 個 byte
+    , .act_1( act_shf[0][55-:8] )   // 第 1 個 byte
     , .act_2( act_shf[0][47-:8] )
     , .act_3( act_shf[0][39-:8] )
     , .act_4( act_shf[0][31-:8] )
@@ -202,7 +202,7 @@ pe_8e  #(    .ELE_BITS(	8 	)     ,   .OUT_BITS(	32	)     ,   .BIAS_BITS(	32	)
     ,  .final_in( final_pe[0] )
 
 //---- kernel ----//
-    ,  .ker_0( ker_din_0[63-:8] )
+    ,  .ker_0( ker_din_0[63-:8] )    // kernel 0 的第 0 個 byte
     ,  .ker_1( ker_din_0[55-:8] )
     ,  .ker_2( ker_din_0[47-:8] )
     ,  .ker_3( ker_din_0[39-:8] )
@@ -212,7 +212,7 @@ pe_8e  #(    .ELE_BITS(	8 	)     ,   .OUT_BITS(	32	)     ,   .BIAS_BITS(	32	)
     ,  .ker_7( ker_din_0[ 7-:8] )
 //---- bias ----//
     ,  .bias_in	( bias_din_0 )	
-    ,  .pass_ker ( pass_ker_dout_0 )	
+    ,  .pass_ker ( pass_ker_dout_0 )  // 傳給下一個 PE col	
     ,  .pass_bias ( pass_bias_dout_0 )	
     ,  .valid_out ( q_valid[0] )	
     ,  .outmacb_sum ( mac_result[0] )	

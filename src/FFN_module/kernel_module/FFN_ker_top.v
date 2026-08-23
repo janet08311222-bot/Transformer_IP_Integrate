@@ -118,14 +118,14 @@ module FFN_ker_top #(
             wire [KER_SRAM_WORDS_BITS-1:0] w_din = write_din_flat [b*KER_SRAM_WORDS_BITS +: KER_SRAM_WORDS_BITS] ;
 
             `ifdef FPGA_SRAM_SETTING
-                BRAM_KER ker_inst(
+                FFN_BRAM_KER ker_inst(
                         .clka(clk), .clkb(clk)
                     ,   .ena(~w_cen), .enb(~r_cen), .wea(~w_wen)
                     ,   .addra(w_addr), .addrb(r_addr)
                     ,   .dina(w_din),  .doutb(dout_bank[b])
                 );
             `else
-                KER_SRAM ker_inst(
+                FFN_KER_SRAM ker_inst(
                         .CLKA(clk), .CENA(w_cen), .WENA(w_wen), .AA(w_addr), .DA(w_din)
                     ,   .CLKB(clk), .CENB(r_cen), .WENB(1'b1),  .AB(r_addr), .QB(dout_bank[b])
                     ,   .EMAA(3'd0), .EMAB(3'd0)

@@ -115,12 +115,12 @@ module FFN_bias_top #(
         assign alt_cen_bias_sram = ~cen_bias_sram;
         assign alt_wen_bias_sram = ~wen_bias_sram;
 
-        BRAM_BIAS bias_0(.clka(clk), .ena(alt_cen_bias_sram), .wea(alt_wen_bias_sram), .addra(addr_bias_sram), .dina(din_bias_sram), .douta(dout_bias_sram));
+        FFN_BRAM_BIAS bias_0(.clka(clk), .ena(alt_cen_bias_sram), .wea(alt_wen_bias_sram), .addra(addr_bias_sram), .dina(din_bias_sram), .douta(dout_bias_sram));
     `else
         assign alt_cen_bias_sram = cen_bias_sram;
         assign alt_wen_bias_sram = wen_bias_sram;
 
-        BIAS_SRAM bias_0(.Q(dout_bias_sram), .CLK(clk), .CEN(alt_cen_bias_sram), .WEN(alt_wen_bias_sram), .A(addr_bias_sram), .D(din_bias_sram), .EMA(3'b0));
+        FFN_BIAS_SRAM bias_0(.Q(dout_bias_sram), .CLK(clk), .CEN(alt_cen_bias_sram), .WEN(alt_wen_bias_sram), .A(addr_bias_sram), .D(din_bias_sram), .EMA(3'b0));
     `endif
 
     //-------------------------------------------------------------------

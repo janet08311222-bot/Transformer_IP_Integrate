@@ -93,14 +93,9 @@ reg valid_in_dly0 , valid_in_dly1 , valid_in_dly2 , valid_in_dly3 , valid_in_dly
 reg final_in_dly0 , final_in_dly1 , final_in_dly2 , final_in_dly3 , final_in_dly4 , final_in_dly5 , final_in_dly6 , final_in_dly7	;
 
 
+//  只有 stage0 / stage6 的 bias 有人讀,其餘 6 級是沒接出去的複本
 reg signed [BIAS_BITS-1 : 0] stage0_bias_in ;
-reg signed [BIAS_BITS-1 : 0] stage1_bias_in ;
-reg signed [BIAS_BITS-1 : 0] stage2_bias_in ;
-reg signed [BIAS_BITS-1 : 0] stage3_bias_in ;
-reg signed [BIAS_BITS-1 : 0] stage4_bias_in ;
-reg signed [BIAS_BITS-1 : 0] stage5_bias_in ;
 reg signed [BIAS_BITS-1 : 0] stage6_bias_in ;
-reg signed [BIAS_BITS-1 : 0] stage7_bias_in ;
 
 reg signed [BIAS_BITS-1 : 0] bias_in_dly0 , bias_in_dly1 , bias_in_dly2 , bias_in_dly3 , bias_in_dly4 , bias_in_dly5 , bias_in_dly6 , bias_in_dly7 ;
 
@@ -135,31 +130,22 @@ reg		[ELE_BITS-1 : 0 ] stage0_ker_5 ;
 reg		[ELE_BITS-1 : 0 ] stage0_ker_6 ;
 reg		[ELE_BITS-1 : 0 ] stage0_ker_7 ;
 
-reg		stage0_final_in	;
-reg		stage1_final_in	;
-reg		stage2_final_in	;
-reg		stage3_final_in	;
+//  stage0..3_final_in 沒人讀(下游從 stage3..6_align_final 取)
 reg		stage4_final_in	;
 reg		stage5_final_in	;
 reg		stage6_final_in	;
 reg		stage7_final_in	;
 
-reg		stage0_align_final	;
-reg		stage1_align_final	;
-reg		stage2_align_final	;
+//  stage0/1/2/7_align_final 沒人讀
 reg		stage3_align_final	;
 reg		stage4_align_final	;
 reg		stage5_align_final	;
 reg		stage6_align_final	;
-reg		stage7_align_final	;
 
+//  stage1/2/3/6_valid_in 沒人讀
 reg 	stage0_valid_in	;
-reg 	stage1_valid_in	;
-reg 	stage2_valid_in	;
-reg 	stage3_valid_in	;
 reg 	stage4_valid_in	;
 reg 	stage5_valid_in	;
-reg 	stage6_valid_in	;
 reg 	stage7_valid_in	;
 
 // wire signed [ 2*ELE_BITS -1 : 0] multsigned_pd_0 ;
@@ -378,7 +364,7 @@ always@( posedge clk )begin
 		stage1_multsigned_pd_1 <= $signed( {1'd0 , stage0_act_1} ) * $signed( {1'd0 , stage0_ker_1} )	;
 		stage1_multsigned_pd_2 <= $signed( {1'd0 , stage0_act_2} ) * $signed( {1'd0 , stage0_ker_2} )	;
 		stage1_multsigned_pd_3 <= $signed( {1'd0 , stage0_act_3} ) * $signed( {1'd0 , stage0_ker_3} )	;
-		stage1_multsigned_pd_4 <= $signed( {1'd0 , stage0_act_4} ) * $signed( {1'd0 , stage0_ker_4} )	;
+stage1_multsigned_pd_4 <= $signed( {1'd0 , stage0_act_4} ) * $signed( {1'd0 , stage0_ker_4} )	;
 		stage1_multsigned_pd_5 <= $signed( {1'd0 , stage0_act_5} ) * $signed( {1'd0 , stage0_ker_5} )	;
 		stage1_multsigned_pd_6 <= $signed( {1'd0 , stage0_act_6} ) * $signed( {1'd0 , stage0_ker_6} )	;
 		stage1_multsigned_pd_7 <= $signed( {1'd0 , stage0_act_7} ) * $signed( {1'd0 , stage0_ker_7} )	;
@@ -652,20 +638,12 @@ end
 //========    valid and final     ========
 //==============================================================================
 always@( * )begin
-	stage0_align_final	= final_in_dly0;
-	stage1_align_final	= final_in_dly1 ;
-	stage2_align_final	= final_in_dly2 ;
 	stage3_align_final	= final_in_dly3 ;
 	stage4_align_final	= final_in_dly4 ;
 	stage5_align_final	= final_in_dly5 ;
 	stage6_align_final	= final_in_dly6 ;
-	stage7_align_final	= final_in_dly7 ;
 end
 always@( * )begin
-	stage0_final_in	= final_in_dly0;
-	stage1_final_in	= final_in_dly1 ;
-	stage2_final_in	= final_in_dly2 ;
-	stage3_final_in	= final_in_dly3 ;
 	stage4_final_in	= stage3_align_final ;
 	stage5_final_in	= stage4_align_final ;
 	stage6_final_in	= stage5_align_final ;
@@ -673,12 +651,8 @@ always@( * )begin
 end
 always@( * )begin
 	stage0_valid_in	= valid_in ;
-	stage1_valid_in	= valid_in_dly0 ;
-	stage2_valid_in	= valid_in_dly1 ;
-	stage3_valid_in	= valid_in_dly2 ;
 	stage4_valid_in	= valid_in_dly3 ;
 	stage5_valid_in	= valid_in_dly4 ;
-	stage6_valid_in	= valid_in_dly5 ;
 	stage7_valid_in	= valid_in_dly6 ;
 end
 
@@ -799,13 +773,7 @@ end
 //==============================================================================
 always @(*) begin
 		stage0_bias_in	= bias_in_dly0	;
-		stage1_bias_in	= bias_in_dly0	;
-		stage2_bias_in	= bias_in_dly0	;
-		stage3_bias_in	= bias_in_dly1	;
-		stage4_bias_in	= bias_in_dly2	;
-		stage5_bias_in	= bias_in_dly3	;
 		stage6_bias_in	= bias_in_dly4	;	// stage 6 need bias data make sure stage5_align_final=1, with correct bias data.
-		stage7_bias_in	= bias_in_dly5	;
 end
 
 // //---- biasing block ----//

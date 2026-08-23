@@ -147,7 +147,7 @@ wire [ 64 -1 : 0 ] din_kersr_0 ,din_kersr_1 ,din_kersr_2 ,din_kersr_3 ,din_kersr
 
 //----declare ker_top sram read signal start------ 
 wire ksr_cen_kersr_0 ,ksr_cen_kersr_1 ,ksr_cen_kersr_2 ,ksr_cen_kersr_3 ,ksr_cen_kersr_4 ,ksr_cen_kersr_5 ,ksr_cen_kersr_6 ,ksr_cen_kersr_7 ; 
-wire ksr_wen_kersr_0 ,ksr_wen_kersr_1 ,ksr_wen_kersr_2 ,ksr_wen_kersr_3 ,ksr_wen_kersr_4 ,ksr_wen_kersr_5 ,ksr_wen_kersr_6 ,ksr_wen_kersr_7 ; 
+// ksr_wen_kersr_0..7 : declared but never driven or read -- removed
 wire [ KER_ADDR_CNT_BITS -1 : 0 ] ksr_addr_kersr_0 ,ksr_addr_kersr_1 ,ksr_addr_kersr_2 ,ksr_addr_kersr_3 ,ksr_addr_kersr_4 ,ksr_addr_kersr_5 ,ksr_addr_kersr_6 ,ksr_addr_kersr_7 ; 
 //----declare ker_top sram read signal  end------ 
 

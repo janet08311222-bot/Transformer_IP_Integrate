@@ -162,12 +162,12 @@ module FFN_ot_top #(
         assign alt_cen_ot_sram = ~cen_ot_sram;
         assign alt_wen_ot_sram = ~wen_ot_sram;
 
-        BRAM_OT ot_0(.clka(clk), .ena(alt_cen_ot_sram), .wea(alt_wen_ot_sram), .addra(addr_ot_sram), .dina(din_ot_sram), .douta(dout_ot_sram));
+        FFN_BRAM_OT ot_0(.clka(clk), .ena(alt_cen_ot_sram), .wea(alt_wen_ot_sram), .addra(addr_ot_sram), .dina(din_ot_sram), .douta(dout_ot_sram));
     `else
         assign alt_cen_ot_sram = cen_ot_sram;
         assign alt_wen_ot_sram = wen_ot_sram;
 
-        OT_SRAM ot_0(.Q(dout_ot_sram), .CLK(clk), .CEN(alt_cen_ot_sram), .WEN(alt_wen_ot_sram), .A(addr_ot_sram), .D(din_ot_sram), .EMA(3'b0));
+        FFN_OT_SRAM ot_0(.Q(dout_ot_sram), .CLK(clk), .CEN(alt_cen_ot_sram), .WEN(alt_wen_ot_sram), .A(addr_ot_sram), .D(din_ot_sram), .EMA(3'b0));
     `endif
 
 	FFN_ot_fifo ot_fifo_inst (

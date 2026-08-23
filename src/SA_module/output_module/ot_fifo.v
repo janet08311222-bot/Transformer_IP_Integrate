@@ -24,7 +24,7 @@ module ot_fifo (
 //------------------------Parameter----------------------
 localparam    
 	DATA_BITS  = 64	,
-    DEPTH_BITS = 4	;
+    DEPTH_BITS = 12	;
 localparam
     DEPTH = 1 << DEPTH_BITS;
 //------------------------Local signal-------------------
@@ -44,8 +44,8 @@ output	wire 						empty_n		;
 input	wire 						read		;
 output	wire 	[ DATA_BITS-1: 0 ]	data_out	;
 
-// output	wire 						error		;	// we loss output data cause something wrong
-wire 						error		;	// we loss output data cause something wrong
+//  'error' (full & valid_in) was computed but never used, and the port that
+//  once exported it is commented out in the header -- dropped.
 
 //-----------------------------------------------------------------------------
 wire write ;
@@ -53,12 +53,11 @@ wire write ;
 
 //------------------------Body---------------------------
 assign empty_n = ~empty		;
-assign full_n  = ~full		;
+//  'full_n' had no declaration and no port (implicit wire) and nothing read it
 assign data_out    = mem[index]	;
 //-----------------------------------------------------------------------------
 
 assign write = valid_in ;
-assign error = ( full & valid_in ) ? 1'd1 : 1'd0 ;
 
 //index
 always @(posedge clk ) begin
