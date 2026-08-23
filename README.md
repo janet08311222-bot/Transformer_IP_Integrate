@@ -4,7 +4,7 @@
 
 | Block | 來源 | 狀態 |
 |---|---|---|
-| Self-Attention (`dla512_top`) | 我們的 2-row parallel 版 | 已換入，synthesis 乾淨；Transformer 層功能模擬未做 |
+| Self-Attention (`dla512_top`) | 我們的 2-row parallel 版 | 已換入，**模擬 PASS 4096/4096 bit-exact** |
 | FFN (`FFN_top`) | 我們的 i-GELU + 16-column 版 | 已換入，**FFN1 模擬 PASS 2048/2048 bit-exact** |
 | Softmax (`softmax_top`) | 我們的 LUT 版 | 已換入，**模擬 PASS 3328/3328 bit-exact** |
 | Add&Norm (`addnormtop`) | 學長的 | 沿用，synthesis 乾淨 |
@@ -18,7 +18,7 @@ Behavioural simulation 用**真的 IP**（不是 `sim/stubs_*.v`）：
 |---|---|
 | `` `define FFN1 `` | PASS，2048/2048 bit-exact，0 個未驅動，136,279 cycles |
 | `` `define SOFTMAX `` | PASS，52 組 × 64 = 3328/3328 bit-exact，11,260 cycles |
-| SA | Transformer 層還沒有 SA 的 stimulus，`tb/Transformer_tb.sv` 目前只有 FFN1/FFN2/SOFTMAX |
+| `fsm_check_tb` (`tb/new_tb_512MAC.sv`) | PASS，4096/4096 bit-exact，0 個未驅動，173,886 cycles |
 
 softmax 那個 PASS 順帶驗證了 `src/common_module/DW_mult_pipe_fpga.v`：gold 是作者用真的
 DesignWare `DW_mult_pipe` 產生的，3328 筆全對代表這個 FPGA 替代品的 latency 與
@@ -35,7 +35,8 @@ src/
   SOFTMAX_module/
   Add_Norm_module/
   common_module/         SA 與 FFN 共用的 leaf，只有一份
-tb/Transformer_tb.sv     Transformer 層 testbench（FFN1 / FFN2 / SOFTMAX 三種模式）
+tb/Transformer_tb.sv     FFN1 / FFN2 / SOFTMAX 的 testbench
+tb/new_tb_512MAC.sv      Self-Attention 的 testbench（top = fsm_check_tb）
 pat/                     測資與 gold pattern
 vivado/                  專案產生 / synthesis / simulation 腳本
 sim/                     純命令列 elaboration 用的 filelist 與 IP stub
@@ -89,7 +90,18 @@ vivado -mode batch -source vivado/gen_sim_scripts.tcl
 bash vivado/run_sim.sh
 ```
 
-要換跑 FFN1 / FFN2，改 `tb/Transformer_tb.sv` 開頭的 `` `define FFN1 ``。
+要換跑 FFN1 / FFN2 / SOFTMAX，改 `tb/Transformer_tb.sv` 開頭的 `` `define FFN1 ``（三個只留一個沒被註解）。
+
+跑 Self-Attention 要指定 testbench：
+
+```bash
+vivado -mode batch -source vivado/gen_sim_scripts.tcl -tclargs fsm_check_tb
+```
+
+```bash
+bash vivado/run_sim.sh fsm_check_tb
+```
+
 FFN1 的 gold 是 `pat/FFN1_igelu_out.dat`（i-GELU 開啟），不是 `FFN1_out_original.dat`。
 測資路徑由 tb 開頭的 `` `PAT_DIR `` 決定，repo 搬家時改那一行就好。
 
