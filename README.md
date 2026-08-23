@@ -64,15 +64,31 @@ Synthesis：
 vivado -mode batch -source vivado/run_synth.tcl
 ```
 
-Behavioural simulation：
+Behavioural simulation（**兩步**，原因見下）：
 
 ```bash
-vivado -mode batch -source vivado/run_sim.tcl
+vivado -mode batch -source vivado/gen_sim_scripts.tcl
+```
+
+```bash
+bash vivado/run_sim.sh
 ```
 
 要換跑 FFN1 / FFN2，改 `tb/Transformer_tb.sv` 開頭的 `` `define FFN1 ``。
 FFN1 的 gold 是 `pat/FFN1_igelu_out.dat`（i-GELU 開啟），不是 `FFN1_out_original.dat`。
 測資路徑由 tb 開頭的 `` `PAT_DIR `` 決定，repo 搬家時改那一行就好。
+
+### 為什麼模擬要分兩步
+
+`launch_simulation` 會 spawn `compile.bat` 當子程序，而這台機器上只要 Vivado 自己的 stdout 是 pipe（也就是任何從腳本驅動的情況），這個 spawn 就會失敗：
+
+```
+ERROR: [Common 17-180] Spawn failed: Broken pipe
+```
+
+`-log`、`Out-Null`、`Start-Process -RedirectStandardOutput` 都擋不掉。所以改成先讓 Vivado 產出 xsim 腳本（`-scripts_only`），再自己跑 `xvlog` / `xvhdl` / `xelab` / `xsim`。做的事完全一樣。從 GUI 開專案跑則沒有這個問題。
+
+`run_sim.sh` 裡 **`xvhdl` 那步不能省** —— `mult_gen` 和 `cordic` 的模擬模型是 VHDL 不是 Verilog，跳過的話 `MULT_2/3_STAGE_*` 和 `DW_sqrt` 在 elaborate 會找不到。
 
 ### 純命令列快速檢查
 
@@ -83,6 +99,23 @@ xvlog -f sim/transformer.f && xelab Transformer_top
 ```
 
 `sim/stubs_*.v` 是 IP 的替身，**只能用來 elaborate**。它們是照 RTL 寫的，所以抓不到 RTL 與真實 IP 之間的差異（實際上就漏抓過兩個，見 git log），而且 latency 跟真 IP 不同，不能拿來跑 functional sim。真的要跑模擬請走 Vivado 專案。
+
+## 面積：塞不進 xc7z020（已知，非 blocker）
+
+整合後在 `xc7z020clg484-1` 上 synthesis **0 error**，但放不下：
+
+| 資源 | 用量 | 裝置 | 佔比 |
+|---|---|---|---|
+| Slice LUT | 80,838 | 53,200 | **152%** |
+| Block RAM | 141 | 140 | **101%** |
+| Slice Register | 58,575 | 106,400 | 55% |
+| DSP | 86 | 220 | 39% |
+
+各 block 的 LUT：SA 32,655 / FFN 19,134 / Add&Norm 16,924 / Softmax 5,609。
+沒被動過的 Add&Norm + Softmax 就佔了裝置 42%。
+
+**這份不上板，FPGA 只是功能驗證用，真正目標是 ADFP**，所以不打算為此縮減設計。
+真要上板才需要換更大的 part 或砍規模。另外專案目前沒有 XDC，timing 是 unconstrained。
 
 ## FFN 是 16-column，config 跟 8-way 不一樣
 
