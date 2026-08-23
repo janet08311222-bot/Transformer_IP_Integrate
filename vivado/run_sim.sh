@@ -16,6 +16,11 @@
 # ============================================================================
 set -e
 
+#  Which snapshot to run; must match the tb gen_sim_scripts.tcl was given.
+#      bash vivado/run_sim.sh                 # Transformer_tb (FFN / softmax)
+#      bash vivado/run_sim.sh fsm_check_tb    # Self-Attention
+sim_top="${1:-Transformer_tb}"
+
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sim_dir="$repo_dir/vivado/build/Transformer_IP/Transformer_IP.sim/sim_1/behav/xsim"
 
@@ -31,20 +36,20 @@ XLIBS="-L blk_mem_gen_v8_4_3 -L xil_defaultlib -L xbip_utils_v3_0_10 \
 -L cordic_v6_0_15 -L unisims_ver -L unimacro_ver -L secureip -L xpm"
 
 echo "==== compile (verilog) ===="
-xvlog --relax -prj Transformer_tb_vlog.prj -log xvlog.log
+xvlog --relax -prj "${sim_top}_vlog.prj" -log xvlog.log
 
 #  mult_gen and cordic ship VHDL simulation models, so this step is NOT
 #  optional - without it MULT_2/3_STAGE_* and DW_sqrt are missing at elaborate.
 echo "==== compile (vhdl) ===="
-xvhdl --relax -prj Transformer_tb_vhdl.prj -log xvhdl.log
+xvhdl --relax -prj "${sim_top}_vhdl.prj" -log xvhdl.log
 
 echo "==== elaborate ===="
 xelab --debug typical --relax --mt 2 $XLIBS \
-    --snapshot Transformer_tb_behav \
-    xil_defaultlib.Transformer_tb xil_defaultlib.glbl -log elaborate.log
+    --snapshot "${sim_top}_behav" \
+    "xil_defaultlib.$sim_top" xil_defaultlib.glbl -log elaborate.log
 
 echo "==== simulate ===="
-xsim Transformer_tb_behav -runall -log simulate.log
+xsim "${sim_top}_behav" -runall -log simulate.log
 
 echo "==== done; verdict: ===="
 grep -E "RESULT:|CYCLES:|compared|WATCHDOG" simulate.log || true

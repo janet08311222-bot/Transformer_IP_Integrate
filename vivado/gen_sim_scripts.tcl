@@ -35,7 +35,24 @@ add_files -quiet -norecurse [glob \
 set_property top Transformer_top [current_fileset]
 update_compile_order -fileset sources_1
 
-set_property top Transformer_tb [get_filesets sim_1]
+#  Which testbench to run. Pass it in with -tclargs, e.g.
+#      vivado -mode batch -source vivado/gen_sim_scripts.tcl -tclargs fsm_check_tb
+#  Transformer_tb  -> FFN1 / FFN2 / SOFTMAX (tb/Transformer_tb.sv)
+#  fsm_check_tb    -> Self-Attention        (tb/new_tb_512MAC.sv)
+set sim_top [expr {$argc > 0 ? [lindex $argv 0] : "Transformer_tb"}]
+puts "==== sim top: $sim_top ===="
+
+#  Add only the tb being run. tb/ also holds FFN_tb.sv, the STANDALONE FFN
+#  testbench, which drives FFN_top through its old AXI-Stream ports - those no
+#  longer exist now that FFN_top is fifo-level, so keep it out of the fileset.
+switch -- $sim_top {
+    Transformer_tb { set tb_file tb/Transformer_tb.sv }
+    fsm_check_tb   { set tb_file tb/new_tb_512MAC.sv }
+    default        { error "unknown sim top '$sim_top' (expected Transformer_tb or fsm_check_tb)" }
+}
+foreach f [get_files -quiet -of_objects [get_filesets sim_1] *.sv] { remove_files -fileset sim_1 $f }
+add_files -fileset sim_1 -norecurse $repo_dir/$tb_file
+set_property top $sim_top [get_filesets sim_1]
 set_property -name {xsim.simulate.runtime} -value {all} -objects [get_filesets sim_1]
 update_compile_order -fileset sim_1
 

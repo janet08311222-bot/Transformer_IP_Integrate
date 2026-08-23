@@ -59,12 +59,13 @@
 
     `ifdef VIVA
     //----input pattern ----  //C:/Users/w9601/Desktop/lyc/512PE/PAT
-        `define IF_WPAT 	"C:/Users/LCP/Desktop/Edu/pat/input_token.dat"	
-        `define KER_WPAT	"C:/Users/LCP/Desktop/Edu/pat/Wq.dat"      //DMA_KER_TEST
-        `define BIAS_WPAT	"C:/Users/LCP/Desktop/Edu/pat/fake_bias.dat"
+        `define PAT_DIR "D:/Transformer_code/Transformer_IP_Integrate/pat/"
+        `define IF_WPAT 	{`PAT_DIR, "input_token.dat"}
+        `define KER_WPAT	{`PAT_DIR, "Wq.dat"}      //DMA_KER_TEST
+        `define BIAS_WPAT	{`PAT_DIR, "fake_bias.dat"}
         //----gold pattern ----
         
-        `define OF_GOLD	    "C:/Users/LCP/Desktop/Edu/pat/Q.dat"
+        `define OF_GOLD	    {`PAT_DIR, "Q.dat"}
     `endif
 
 `define ENDIAN_SWAP(x) {x[7:0], x[15:8], x[23:16], x[31:24], x[39:32], x[47:40], x[55:48], x[63:56]}
@@ -403,6 +404,7 @@ localparam TS_CFG_15	= `ENDIAN_SWAP( CFG_15	 );
 
     reg [32-1:0] tb_o_cnt ;
     reg [32-1:0] err_ofmap;
+    reg [32-1:0] x_cnt;		// output words the DUT never drove (guards a false PASS)
     reg [64-1:0] ofm_array [0 : OF_ARRAY_SIZE-1] ;
     reg [64-1:0] ofm_gold [ 0: OF_ARRAY_SIZE-1 ];
     reg [64-1:0] ofm_gold_temp [ 0: OF_ARRAY_SIZE-1 ];
@@ -1032,7 +1034,13 @@ end
         wait( dutot_done ) ;	// wait DUT output data all done
         err_ofmap = 0;
         icp = 0;
+        x_cnt = 0;
+        //  OT_NUM_FORCMP = TB_RUN_COL * TB_RUN_OTCH/8 * TB_RUN_OTROW = 4096, exactly
+        //  the number of words in Q.dat, so every slot really is compared. x_cnt
+        //  still guards the X-vs-X case: `!==` treats X as equal to X, so an output
+        //  the DUT never drove would otherwise be counted as a match.
         for (icp = 0; icp<OT_NUM_FORCMP ; icp= icp+1 ) begin
+            if( ofm_array[icp] === 64'bx ) x_cnt = x_cnt + 1 ;
             if(  ofm_array[icp] !== ofm_gold[icp] ) begin
                 err_ofmap = err_ofmap +1 ;
                 $display("** error : number => %d , error pattern => %16x , gold pattern => %16x        **",icp,ofm_array[icp],ofm_gold[icp]  );
@@ -1049,6 +1057,21 @@ end
         $display("**  please check the error number ,Simulation STOP at cycle %d **",cycle);
         $display("**  If needed, You can increase End_CYCLE value in tb.sv          **");
         $display("********************************************************************");
+
+        //----    verdict    -----
+        $display("====================================================================");
+        $display(">>> SA: DUT produced %0d output words; compared %0d against gold", tb_o_cnt, OT_NUM_FORCMP);
+        $display(">>> undriven (all-X) output words : %0d", x_cnt);
+        if( err_ofmap == 0 && x_cnt == 0 && tb_o_cnt > 0 )
+            $display(">>> RESULT: PASS  (%0d/%0d bit-exact)", OT_NUM_FORCMP, OT_NUM_FORCMP);
+        else if( tb_o_cnt == 0 )
+            $display(">>> RESULT: FAIL  (DUT produced no output at all)");
+        else if( x_cnt != 0 )
+            $display(">>> RESULT: FAIL  (%0d mismatches, and %0d words were never driven)", err_ofmap, x_cnt);
+        else
+            $display(">>> RESULT: FAIL  (%0d/%0d mismatched)", err_ofmap, OT_NUM_FORCMP);
+        $display(">>> CYCLES: %0d", cycle);
+        $display("====================================================================");
 
 
 
