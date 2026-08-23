@@ -20,6 +20,7 @@
 `define NI_DELAY  2		                // NONIDEAL delay latency
 `define AFPOS_DELAY  0.5		        // after posedge NONIDEAL delay latency
 `define FFN1
+// `define SOFTMAX                  // run the softmax path instead of FFN1/FFN2
 
 //-- timescale --
 `ifdef RTL
@@ -533,6 +534,24 @@ initial begin
 
         $display("[TB] All %0d groups done. Total mismatches = %0d", total_group, err_cnt);
         repeat (5) @(posedge clk);
+
+        //----    verdict    -----
+        //  The FFN compare block is `ifndef SOFTMAX, so this branch owns the
+        //  verdict and the $finish in softmax mode.
+        $display("====================================================================");
+        $display(">>> softmax: %0d groups x 64 outputs = %0d words compared against gold",
+                 total_group, total_group*64);
+        if( total_group == 0 )
+            $display(">>> RESULT: FAIL  (no input groups loaded - check pat/rearrange.dat)");
+        else if( err_cnt == 0 )
+            $display(">>> RESULT: PASS  (%0d/%0d bit-exact)", total_group*64, total_group*64);
+        else
+            $display(">>> RESULT: FAIL  (%0d/%0d mismatched)", err_cnt, total_group*64);
+        $display(">>> CYCLES: %0d", cycle);
+        $display("====================================================================");
+
+        #( `CYCLE*100 ) ;
+        $finish;
     `endif
 
     //---------- FFN1 testbench control ----
@@ -1783,6 +1802,10 @@ end
 // =============================================================================
 // ===============		compare data block		================================
 // =============================================================================
+//  FFN-only. In SOFTMAX mode the FFN path is never exercised, so tb_o_cnt is 0
+//  and this block would print a misleading "DUT produced no output" FAIL right
+//  after the softmax comparison has already reported its own verdict.
+`ifndef SOFTMAX
     initial begin
         #1;
         wait( reset ) ;
@@ -1832,11 +1855,12 @@ end
         // $display("**  If needed, You can increase End_CYCLE value in tb.sv          **");
         // $display("********************************************************************");
         
-        #( `CYCLE*500 ) ;  
+        #( `CYCLE*500 ) ;
 
         $finish;
 
     end
+`endif  // !SOFTMAX
 //--------------------------------------------------------------------------
 
 // =============================================================================
