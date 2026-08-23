@@ -17,6 +17,24 @@
 set repo_dir [file normalize [file dirname [info script]]/..]
 open_project $repo_dir/vivado/build/Transformer_IP/Transformer_IP.xpr
 
+#  The project's source list was globbed when it was created, so files added
+#  since (e.g. a new module in a swapped-in block) are not in it. Re-glob every
+#  time; add_files -quiet ignores the ones already present.
+add_files -quiet -norecurse [glob \
+    $repo_dir/src/*.v \
+    $repo_dir/src/common_module/*.v \
+    $repo_dir/src/common_module/counter/*.v \
+    $repo_dir/src/common_module/fifo/*.v \
+    $repo_dir/src/SA_module/*.v \
+    $repo_dir/src/SA_module/*/*.v \
+    $repo_dir/src/FFN_module/*.v \
+    $repo_dir/src/FFN_module/*/*.v \
+    $repo_dir/src/SOFTMAX_module/*.v \
+    $repo_dir/src/Add_Norm_module/*.v \
+]
+set_property top Transformer_top [current_fileset]
+update_compile_order -fileset sources_1
+
 set_property top Transformer_tb [get_filesets sim_1]
 set_property -name {xsim.simulate.runtime} -value {all} -objects [get_filesets sim_1]
 update_compile_order -fileset sim_1

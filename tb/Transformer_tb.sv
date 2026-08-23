@@ -289,6 +289,7 @@ reg [32-1:0] tb_o_cnt2 ;
 reg [32-1:0] ot_addr ;
 reg [32-1:0] ot_token_sub1 ;
 reg [32-1:0] err_ofmap;
+reg [32-1:0] x_cnt;		// output words the DUT never drove (guards a false PASS)
 reg [64-1:0] ofm_array [0 : OT_NUM_FORCMP] ;
 reg [64-1:0] ofm_gold [ 0: OT_NUM_FORCMP ];
 reg [64-1:0] ofm_gold_temp [ 0: OT_NUM_FORCMP ];
@@ -1789,23 +1790,34 @@ end
         wait( dutot_done ) ;	// wait DUT output data all done
         err_ofmap = 0;
         icp = 0;
-        for (icp = 0; icp<OT_NUM_FORCMP ; icp= icp+1 ) begin
+        x_cnt  = 0;
+        //  Compare exactly the words the DUT produced (tb_o_cnt), NOT
+        //  OT_NUM_FORCMP. OT_NUM_FORCMP = TB_RUN_ROW * TB_RUN_OTCOL = 16384 for
+        //  FFN1, but the gold file holds 2048 words, so indices past 2047 are X
+        //  in BOTH arrays - and `!==` treats X vs X as equal, which silently
+        //  turns 14336 uncompared slots into "matches" and inflates the verdict.
+        for (icp = 0; icp<tb_o_cnt ; icp= icp+1 ) begin
+            if( ofm_array[icp] === 64'bx ) x_cnt = x_cnt + 1 ;
             if( ofm_array[icp] !== ofm_gold_temp[icp] ) begin
                 err_ofmap = err_ofmap +1 ;
                 if(ofm_array[icp] !== 64'bx)
                     $display("** error   : number => %d , error pattern => %16x , gold pattern => %16x        **",icp,ofm_array[icp],ofm_gold_temp[icp]  );
             end
-            // per-word "correct" lines suppressed: OT_NUM_FORCMP is 2048 for
-            // FFN1 and they bury the verdict. Errors above are still printed.
+            // per-word "correct" lines suppressed: 2048 of them bury the verdict.
         end
 
         //----    verdict    -----
         $display("====================================================================");
-        $display(">>> compared %0d words against gold, %0d mismatches", OT_NUM_FORCMP, err_ofmap);
-        if( err_ofmap == 0 )
-            $display(">>> RESULT: PASS  (%0d/%0d bit-exact)", OT_NUM_FORCMP, OT_NUM_FORCMP);
+        $display(">>> DUT produced %0d output words; compared all of them against gold", tb_o_cnt);
+        $display(">>> undriven (all-X) output words : %0d", x_cnt);
+        if( err_ofmap == 0 && tb_o_cnt > 0 && x_cnt == 0 )
+            $display(">>> RESULT: PASS  (%0d/%0d bit-exact)", tb_o_cnt, tb_o_cnt);
+        else if( tb_o_cnt == 0 )
+            $display(">>> RESULT: FAIL  (DUT produced no output at all)");
+        else if( x_cnt != 0 )
+            $display(">>> RESULT: FAIL  (%0d mismatches, and %0d words were never driven)", err_ofmap, x_cnt);
         else
-            $display(">>> RESULT: FAIL  (%0d/%0d mismatched)", err_ofmap, OT_NUM_FORCMP);
+            $display(">>> RESULT: FAIL  (%0d/%0d mismatched)", err_ofmap, tb_o_cnt);
         $display(">>> CYCLES: %0d", cycle);
         $display("====================================================================");
 
