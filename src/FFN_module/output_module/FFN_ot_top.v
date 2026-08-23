@@ -16,7 +16,9 @@
 //      Redundant Columns:          0
 //      Test Muxes                  Off
 //-----------------------------------------------------------------------------
-// `define FPGA_SRAM_SETTING
+`ifndef ASIC
+`define FPGA_SRAM_SETTING   // FPGA default; ASIC build passes +define+ASIC -> ASIC SRAM path
+`endif
 
 module FFN_ot_top #(
 	parameter TBITS = 64 
@@ -28,7 +30,7 @@ module FFN_ot_top #(
         clk
     ,   reset
 
-	,   FFN_done
+    ,   FFN_done
 
     ,	din_s2mm_tready
 	,	fifo_full_n
@@ -43,12 +45,13 @@ module FFN_ot_top #(
 
 	,	cfg_ker_tile_readnums_sub1
 
-	,	cfg_ot_rnd_finsub1	
+	,	cfg_ot_rnd_finsub1
 	,	cfg_ot_tgpfnsub1	
 	,	cfg_ot_tcolfnsub1	
 	,	cfg_ot_tchafnsub1	
-	,	cfg_ot_sft_gp		
-	,	cfg_ot_sft_colpra	
+	,	cfg_ot_sft_gp
+	,	cfg_ot_sft_colpra
+	,	cfg_ot_sft_col
 ) ;
 
 	//==============================================================================    
@@ -58,7 +61,7 @@ module FFN_ot_top #(
 	input  wire	clk			;
 	input  wire reset		;
 
-	output  wire    FFN_done    ;
+	output wire	FFN_done	;	// pulses when the last output tile has been streamed out
 
 	input  wire 						din_s2mm_tready	;
 	input  wire 						fifo_full_n		;
@@ -72,7 +75,7 @@ module FFN_ot_top #(
 	input  wire [PEBLKROW_NUM*TBITS-1:0]	data_din		;
 	
 	//----    config in    -----
-	input wire 	[1:0]						cfg_ker_tile_readnums_sub1 ;
+	input wire	[1:0]						cfg_ker_tile_readnums_sub1	;
 
 	input wire	[ SRAM_ADDR_BITS-1 : 0 ]	cfg_ot_rnd_finsub1	;
 	input wire	[ SRAM_ADDR_BITS-1 : 0 ]	cfg_ot_tgpfnsub1	;
@@ -80,6 +83,7 @@ module FFN_ot_top #(
 	input wire	[ SRAM_ADDR_BITS-1 : 0 ]	cfg_ot_tchafnsub1	;
 	input wire	[ SRAM_ADDR_BITS-1 : 0 ]	cfg_ot_sft_gp		;
 	input wire	[ SRAM_ADDR_BITS-1 : 0 ]	cfg_ot_sft_colpra	;
+	input wire	[ SRAM_ADDR_BITS-1 : 0 ]	cfg_ot_sft_col		;
 
 	//==============================================================================
 
@@ -105,20 +109,20 @@ module FFN_ot_top #(
 	wire 	read_busy		;
 	wire	read_done		;
 	
-	//---- declare ot_top signal ----
+	//---- declare FFN_ot_top signal ----
 	wire cen_ot_sram ;
 	wire wen_ot_sram ;
 	wire [SRAM_ADDR_BITS-1:0] addr_ot_sram ;
 	wire [SRAM_DATA_BITS-1:0] din_ot_sram  ;
 	wire [SRAM_DATA_BITS-1:0] dout_ot_sram ;
 
-	//---- declare ot_top write signal ----
+	//---- declare FFN_ot_top write signal ----
 	wire write_cen_ot_sram ;
 	wire write_wen_ot_sram ;
 	wire [SRAM_ADDR_BITS-1:0] write_addr_ot_sram ;
 	wire [SRAM_DATA_BITS-1:0] write_din_ot_sram ;
 
-	//---- declare ot_top read signal ----
+	//---- declare FFN_ot_top read signal ----
 	wire read_cen_ot_sram ;
 	wire [SRAM_ADDR_BITS-1:0] read_addr_ot_sram ;
 
@@ -142,13 +146,13 @@ module FFN_ot_top #(
 		endcase
 	end
 
-	//---- ot_top assign cen ----
+	//---- FFN_ot_top assign cen ----
 	assign cen_ot_sram = (ot_write_busy) ? write_cen_ot_sram : read_cen_ot_sram ;
-	//---- ot_top assign wen ----
+	//---- FFN_ot_top assign wen ----
 	assign wen_ot_sram = (ot_write_busy) ? write_wen_ot_sram : 1'd1 ;
-	//---- ot_top assign addr ----
+	//---- FFN_ot_top assign addr ----
 	assign addr_ot_sram = (ot_write_busy) ? write_addr_ot_sram : read_addr_ot_sram ;
-	//---- ot_top assign din ----
+	//---- FFN_ot_top assign din ----
 	assign din_ot_sram = (ot_write_busy) ? write_din_ot_sram : 'd0 ;
 
 	 //==============================================================================
@@ -158,7 +162,7 @@ module FFN_ot_top #(
         assign alt_cen_ot_sram = ~cen_ot_sram;
         assign alt_wen_ot_sram = ~wen_ot_sram;
 
-        FFN_BRAM_OT FFN_ot_0(.clka(clk), .ena(alt_cen_ot_sram), .wea(alt_wen_ot_sram), .addra(addr_ot_sram), .dina(din_ot_sram), .douta(dout_ot_sram));
+        BRAM_OT ot_0(.clka(clk), .ena(alt_cen_ot_sram), .wea(alt_wen_ot_sram), .addra(addr_ot_sram), .dina(din_ot_sram), .douta(dout_ot_sram));
     `else
         assign alt_cen_ot_sram = cen_ot_sram;
         assign alt_wen_ot_sram = wen_ot_sram;
@@ -166,7 +170,7 @@ module FFN_ot_top #(
         OT_SRAM ot_0(.Q(dout_ot_sram), .CLK(clk), .CEN(alt_cen_ot_sram), .WEN(alt_wen_ot_sram), .A(addr_ot_sram), .D(din_ot_sram), .EMA(3'b0));
     `endif
 
-	FFN_ot_fifo FFN_ot_fifo_inst (
+	FFN_ot_fifo ot_fifo_inst (
 			.clk			( clk				)
 		,	.reset			( reset				)
 
@@ -181,7 +185,7 @@ module FFN_ot_top #(
 	FFN_otsram_w #(
 			.OT_SRAM_WORDS_BITS	( SRAM_DATA_BITS )
 		,   .OT_SRAM_ADDR_BITS	( SRAM_ADDR_BITS )
-	) FFN_ot_w_inst (
+	) ot_w_inst (
 		    .clk	(	clk		)
 		,   .reset	(	reset	)
 
@@ -203,7 +207,7 @@ module FFN_ot_top #(
 	FFN_otsram_r #(
 			.SRAM_DATA_BITS	( SRAM_DATA_BITS )
 		,	.SRAM_ADDR_BITS	( SRAM_ADDR_BITS )
-	) FFN_ot_r_inst (
+	) ot_r_inst (
 			.clk	(	clk		)
 		,	.reset	(	reset	)
 
@@ -211,7 +215,7 @@ module FFN_ot_top #(
 		,	.busy	(	read_busy	)
 		,	.done	(	read_done	)
 
-		,   .FFN_done   (   FFN_done    )
+		,	.FFN_done	(	FFN_done	)
 
 		,	.din_s2mm_tready	(	din_s2mm_tready	)
 		,	.fifo_full_n		(	fifo_full_n		)
@@ -230,6 +234,7 @@ module FFN_ot_top #(
 		,	.cfg_ot_tchafnsub1	(	cfg_ot_tchafnsub1	)
 		,	.cfg_ot_sft_gp		(	cfg_ot_sft_gp		)
 		,	.cfg_ot_sft_colpra	(	cfg_ot_sft_colpra	)
+		,	.cfg_ot_sft_col		(	cfg_ot_sft_col		)
 	) ;
 
 	always @(posedge clk) begin

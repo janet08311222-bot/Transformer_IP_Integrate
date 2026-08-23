@@ -2,26 +2,29 @@
 // Designer : Chao_Ping Liu
 // Create   : 2025.07.05
 // Ver      : 1.0
-// Func     : kernel sram read module
+// Func     : bias sram read module
+// ============================================================================
+// Modified : 2026 -- parameterized fan-out (Phase 1a of PE-col scaling).
+//   The single bias SRAM is read NUM_BANK words at a time and demuxed onto
+//   NUM_BANK column outputs. The old fixed version read 8 words (stride 8,
+//   address low 3 bits select the column); this is generalized to NUM_BANK
+//   (stride NUM_BANK, low $clog2(NUM_BANK) bits) and the per-column outputs
+//   are packed MSB-first into dout_bias_flat (index 0 in the top slot,
+//   matching the old {dout_bias_sram_0,..,_7} concatenation). NUM_BANK=8 is
+//   identical to the previous behavior.
 // ============================================================================
 
 module FFN_biassram_r #(
     parameter BIAS_SRAM_WORDS_BITS = 32
     ,   BIAS_SRAM_ADDR_BITS = 9
+    ,   NUM_BANK = 8
 )(
         clk
     ,   reset
 
     ,   dout_bias_sram
 
-    ,	dout_bias_sram_0
-	,	dout_bias_sram_1
-	,	dout_bias_sram_2
-	,	dout_bias_sram_3
-	,	dout_bias_sram_4
-	,	dout_bias_sram_5
-	,	dout_bias_sram_6
-	,	dout_bias_sram_7
+    ,   dout_bias_flat        // [NUM_BANK*WORDS_BITS-1:0] , column 0 in MSB slot
 
     ,   cen_bias_sram
     ,   addr_bias_sram
@@ -32,21 +35,16 @@ module FFN_biassram_r #(
 
     ,   cfg_bias_readnums
 );
-    
+
+    localparam BIDX_BITS = (NUM_BANK <= 1) ? 1 : $clog2(NUM_BANK) ;
+
     // ============================= I/O port Declare ===============================
     input wire clk   ;
     input wire reset ;
 
     input wire [BIAS_SRAM_WORDS_BITS-1:0]  dout_bias_sram ;
 
-    output reg [BIAS_SRAM_WORDS_BITS-1:0] dout_bias_sram_0 ;
-    output reg [BIAS_SRAM_WORDS_BITS-1:0] dout_bias_sram_1 ;
-    output reg [BIAS_SRAM_WORDS_BITS-1:0] dout_bias_sram_2 ;
-    output reg [BIAS_SRAM_WORDS_BITS-1:0] dout_bias_sram_3 ;
-    output reg [BIAS_SRAM_WORDS_BITS-1:0] dout_bias_sram_4 ;
-    output reg [BIAS_SRAM_WORDS_BITS-1:0] dout_bias_sram_5 ;
-    output reg [BIAS_SRAM_WORDS_BITS-1:0] dout_bias_sram_6 ;
-    output reg [BIAS_SRAM_WORDS_BITS-1:0] dout_bias_sram_7 ;
+    output reg [NUM_BANK*BIAS_SRAM_WORDS_BITS-1:0] dout_bias_flat ;
 
     output reg                             cen_bias_sram  ;
     output reg [BIAS_SRAM_ADDR_BITS-1:0]   addr_bias_sram ;
@@ -60,7 +58,7 @@ module FFN_biassram_r #(
     reg [2:0] bias_read_nums ;
 
     reg                         bias_valid ;
-    reg [2:0]                   bias_addr  ;
+    reg [BIDX_BITS-1:0]         bias_addr  ;
 
     //---- Address counter Declare -----
     reg                             en_bias_addrct    ;
@@ -114,32 +112,21 @@ module FFN_biassram_r #(
         end
         else begin
             bias_valid <= ~cen_bias_sram ;
-            bias_addr  <= addr_bias_sram[2:0] ;
+            bias_addr  <= addr_bias_sram[BIDX_BITS-1:0] ;
         end
     end
 
+    // demux the serially-read words onto NUM_BANK column slots (MSB-first)
+    integer di ;
     always @(posedge clk) begin
         if(reset) begin
-            dout_bias_sram_0 <= 'd0 ;
-            dout_bias_sram_1 <= 'd0 ;
-            dout_bias_sram_2 <= 'd0 ;
-            dout_bias_sram_3 <= 'd0 ;
-            dout_bias_sram_4 <= 'd0 ;
-            dout_bias_sram_5 <= 'd0 ;
-            dout_bias_sram_6 <= 'd0 ;
-            dout_bias_sram_7 <= 'd0 ;
+            dout_bias_flat <= 'd0 ;
         end
         else if(bias_valid) begin
-            case(bias_addr)
-                3'd0: dout_bias_sram_0 <= dout_bias_sram ;
-                3'd1: dout_bias_sram_1 <= dout_bias_sram ;
-                3'd2: dout_bias_sram_2 <= dout_bias_sram ;
-                3'd3: dout_bias_sram_3 <= dout_bias_sram ;
-                3'd4: dout_bias_sram_4 <= dout_bias_sram ;
-                3'd5: dout_bias_sram_5 <= dout_bias_sram ;
-                3'd6: dout_bias_sram_6 <= dout_bias_sram ;
-                3'd7: dout_bias_sram_7 <= dout_bias_sram ;
-            endcase
+            for (di = 0; di < NUM_BANK; di = di + 1) begin
+                if (bias_addr == di[BIDX_BITS-1:0])
+                    dout_bias_flat[(NUM_BANK-di)*BIAS_SRAM_WORDS_BITS-1 -: BIAS_SRAM_WORDS_BITS] <= dout_bias_sram ;
+            end
         end
     end
 
@@ -159,11 +146,10 @@ module FFN_biassram_r #(
     always @(posedge clk) begin
         if(reset)
             bias_addrct_start <= 'd0 ;
-        // else if(bias_read_nums == cfg_bias_readnums && bias_read_done)
         else if(bias_read_done)
-            bias_addrct_start <= bias_addrct_start + 8 ;
+            bias_addrct_start <= bias_addrct_start + NUM_BANK ;
     end
-    assign bias_addrct_final = bias_addrct_start + 7 ;
+    assign bias_addrct_final = bias_addrct_start + (NUM_BANK-1) ;
 
     count_yi_v5 #(
             .BITS_OF_END_NUMBER (   BIAS_SRAM_ADDR_BITS   )

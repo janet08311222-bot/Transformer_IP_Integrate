@@ -17,6 +17,9 @@
 // ============================================================================================================
 // `define FPGA_SETTING
 // `define FPGA_ILA_CHK_SETTING
+`ifndef ASIC
+`define FPGA_SRAM_SETTING   // FPGA default; ASIC build passes +define+ASIC -> drops use_dsp (no DSP in ASIC)
+`endif
 
 `ifdef FPGA_SRAM_SETTING
 (* use_dsp = "yes" *)
@@ -135,7 +138,7 @@ module FFN_pe_top #(
     		FFN_pe_qz_pkg #(
     			    .TBITS(	TBITS 	)
                 ,   .TBYTE(	TBYTE	)
-    		)FFN_pk_0 (
+    		)pk_0 (
     			    .clk    ( clk   )  
     			,	.reset  ( reset ) 
     			,	.data8_din		(	q_result[gx]		)
@@ -154,7 +157,7 @@ module FFN_pe_top #(
         ,   .TBYTE          (	TBYTE	        )     
         ,   .BIAS_BITS      (	BIAS_BITS	    ) 
         ,   .PEBLKCOL_NUM   (   PEBLKCOL_NUM    )
-    )FFN_blkpe_r0(
+    )blkpe_r0(
             .clk    ( clk   )  
     	,	.reset  ( reset )	
     
@@ -185,7 +188,7 @@ module FFN_pe_top #(
                 ,   .TBYTE          (	TBYTE	        )     
                 ,   .BIAS_BITS      (	BIAS_BITS	    ) 
                 ,   .PEBLKCOL_NUM   (   PEBLKCOL_NUM    )
-    		)FFN_arraype_r1(
+    		)arraype_r1(
                     .clk    ( clk   )  
                 ,	.reset  ( reset )	
     

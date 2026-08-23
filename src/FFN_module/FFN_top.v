@@ -5,14 +5,14 @@
 // Func     : FFN top module 
 //  	----parameter reset active low -- https://youtu.be/KyQuVydW1n8
 //  	----high fanout pin fixed by DC synthesis, do not code buffer.
-//  	----get_ins module : distinguish data or instruction for this time.
+//  	----FFN_get_ins module : distinguish data or instruction for this time.
 //  	----signal port naming : should not use common port name for every top module port naming.
 //  	----output signal tips : should not use output signal for flow controlling like "busy".
 // Log		: 
 // ============================================================================
 //----    define for testing    -----
 // `define FPGA_SRAM_SETTING
-`define FPGA_ILA_CHK_SETTING
+// `define FPGA_ILA_CHK_SETTING
 
 module FFN_top #(
         parameter TBITS = 64
@@ -25,19 +25,19 @@ module FFN_top #(
 
 	,   M_AXIS_S2MM_TREADY
 
-	,	isif_data_dout	
-	,	isif_last_dout	
-	,	isif_empty_n	
-	,	isif_strb_dout	
+	,	isif_data_dout
+	,	isif_last_dout
+	,	isif_empty_n
+	,	isif_strb_dout
 	,	isif_user_dout
-	,	isif_read	
+	,	isif_read
 
-	,	osif_full_n	
-	,	ot2fifo_write	
-	,	ot2fifo_data	
-	,	ot2fifo_last	
-	,	osif_strb_din	
-	,	osif_user_din	
+	,	osif_full_n
+	,	ot2fifo_write
+	,	ot2fifo_data
+	,	ot2fifo_last
+	,	osif_strb_din
+	,	osif_user_din
 
 `ifdef FPGA_ILA_CHK_SETTING
 
@@ -65,7 +65,7 @@ module FFN_top #(
     localparam BUF_TAG_BITS 	=	8	;
 
     localparam PEBLKROW_NUM		=	1	;	// PE block number
-	localparam PEBLKCOL_NUM		=	8	;	// PE block number
+	localparam PEBLKCOL_NUM		=	16	;	// PE block number (Phase 1b: 8 -> 16 for ~2x single-token speed)
 
     localparam CNTSTP_WIDTH			= 3		; 		//config input setting
     localparam IFWSTG0_CNTBITS		= 7		;		//config input setting
@@ -87,14 +87,14 @@ module FFN_top #(
 
 	output wire	FFN_done	;
 
-    //-- input fifo signal --
+    //-- input fifo signal (driven by Transformer_top) --
     input [TBITS-1: 0 ]	isif_data_dout			;
     input 				isif_last_dout			;
     input 				isif_empty_n			;
     input [TBYTE-1: 0 ]	isif_strb_dout			;
     input 				isif_user_dout			;
     output 				isif_read				;
-    //-- output fifo signal --
+    //-- output fifo signal (to Transformer_top) --
     input 					osif_full_n				;
     output 					ot2fifo_write			;
     output [TBITS-1: 0 ]	ot2fifo_data			;
@@ -102,18 +102,10 @@ module FFN_top #(
     output [TBYTE-1: 0 ]	osif_strb_din			;
     output 					osif_user_din			;
 
-    // input  wire 			S_AXIS_MM2S_TVALID	;
-    // output wire 			S_AXIS_MM2S_TREADY	;
-    // input  wire [TBITS-1:0]	S_AXIS_MM2S_TDATA	;
-    // input  wire [TBYTE-1:0]	S_AXIS_MM2S_TKEEP	;
-    // input  wire 			S_AXIS_MM2S_TLAST	;
-
-    // output wire             M_AXIS_S2MM_TVALID	;
+    // AXI-Stream now terminates in Transformer_top; only S2MM ready is still needed
+    // by FFN_ot_top for output back-pressure.
     input  wire             M_AXIS_S2MM_TREADY	;
-    // output wire [TBITS-1:0] M_AXIS_S2MM_TDATA	;
-    // output wire [TBYTE-1:0] M_AXIS_S2MM_TKEEP	;
-    // output wire [1-1:0]     M_AXIS_S2MM_TLAST	;
-    
+
     //-----------------------------------------------------------------------------
     //----    FPGA ILA Check I/O    -----
     `ifdef FPGA_ILA_CHK_SETTING
@@ -152,6 +144,7 @@ module FFN_top #(
     wire ker_read_done		;
 	wire ker_read_tile_done	;
 	wire ker_read_last		;
+	wire ker_write_tile_done	;
 
     wire bias_write_start	;
     wire bias_write_busy	;
@@ -188,7 +181,7 @@ module FFN_top #(
 	//---- fsm ----
 	wire [MAST_FSM_BITS-1:0]	fsm_mast_state	;
 
-	//---- d_empn_rd_mux ----
+	//---- FFN_d_empn_rd_mux ----
 	wire if_write_empty_n	;
 	wire ker_write_empty_n	;
 	wire bias_write_empty_n	;
@@ -209,7 +202,7 @@ module FFN_top #(
 	wire bias_write_read	;
 	wire bias_write_en		;
 
-	wire [BIAS_SRAM_WORDS_BITS-1:0] dout_bias_sram_0, dout_bias_sram_1, dout_bias_sram_2, dout_bias_sram_3, dout_bias_sram_4, dout_bias_sram_5, dout_bias_sram_6, dout_bias_sram_7	;
+	wire [PEBLKCOL_NUM*BIAS_SRAM_WORDS_BITS-1:0] dout_bias_flat	;
 
 	wire [BIAS_SRAM_ADDR_BITS-1:0] 	cfg_bias_once_load_size_sub1	;
 
@@ -217,9 +210,8 @@ module FFN_top #(
 	wire ker_write_read	;
 	wire ker_write_en	;
 
-	wire [KER_SRAM_WORDS_BITS-1:0] dout_ker_sram_0,	dout_ker_sram_1, dout_ker_sram_2, dout_ker_sram_3, dout_ker_sram_4, dout_ker_sram_5, dout_ker_sram_6, dout_ker_sram_7	;
-	wire ker_read_valid_0, ker_read_valid_1, ker_read_valid_2, ker_read_valid_3, ker_read_valid_4, ker_read_valid_5, ker_read_valid_6, ker_read_valid_7	;
-	wire ker_read_final_0, ker_read_final_1, ker_read_final_2, ker_read_final_3, ker_read_final_4, ker_read_final_5, ker_read_final_6, ker_read_final_7	;
+	wire [PEBLKCOL_NUM*KER_SRAM_WORDS_BITS-1:0] dout_ker_flat	;
+	wire ker_read_final	;
 
 	wire [KER_SRAM_ADDR_BITS-1:0] 	cfg_ker_length_sub1	;
 	wire [5:0]						cfg_ker_tile_size_sub1 ;
@@ -238,11 +230,13 @@ module FFN_top #(
 	wire [OT_SRAM_ADDR_BITS-1:0]	cfg_ot_tchafnsub1	;
 	wire [OT_SRAM_ADDR_BITS-1:0]	cfg_ot_sft_gp		;
 	wire [OT_SRAM_ADDR_BITS-1:0]	cfg_ot_sft_colpra	;
+	wire [OT_SRAM_ADDR_BITS-1:0]	cfg_ot_sft_col		;
 
     // ===========================================================================
     // =======		instance 	==================================================
     // ===========================================================================
 
+	//----    input AXI-Stream fifo lives in Transformer_top now    -----
 	// INPUT_STREAM_if	#(
 	// 		.TBITS	(	TBITS	)
 	// 	,	.TBYTE	(	TBYTE	)
@@ -269,7 +263,7 @@ module FFN_top #(
     FFN_get_ins #(
 			.TBITS	(	TBITS	)
 		,	.TBYTE	(	TBYTE	)
-	)FFN_get_ins_inst(	
+	)get_ins_inst(	
 			.clk 	(	clk		)
 		,	.reset 	(	reset	)
 
@@ -304,7 +298,7 @@ module FFN_top #(
 		,	.start_reg			(	gi_start		)
 	);
 
-    FFN_fsm64 FFN_fsm64_inst(
+    FFN_fsm64 fsm64_inst(
 			.clk	(	clk		)
 		,	.reset	(	reset	)
 
@@ -317,7 +311,7 @@ module FFN_top #(
 	FFN_schedule_ctrl #(
 			.TBITS	(	TBITS	)
 		,	.TBYTE	(	TBYTE	)
-	)FFN_schedule_ctrl_inst(
+	)schedule_ctrl_inst(
 			.clk	(	clk		)
 		,	.reset	(	reset	)
 		
@@ -335,6 +329,7 @@ module FFN_top #(
 		,	.ker_write_busy		(	ker_write_busy	)
 		,	.ker_write_done		(	ker_write_done	)
 		,	.ker_write_last		(	ker_write_last	)
+		,	.ker_write_tile_done	(	ker_write_tile_done	)
 
 		,	.ker_read_start		(	ker_read_start		)
 		,	.ker_read_busy 		(	ker_read_busy		)
@@ -356,7 +351,7 @@ module FFN_top #(
 
 	);
 
-	FFN_d_empn_rd_mux FFN_d_empn_rd_mux_inst(
+	FFN_d_empn_rd_mux d_empn_rd_mux_inst(
 			.if_write_empty_n	(	if_write_empty_n	)
 		,	.ker_write_empty_n	(	ker_write_empty_n	)
 		,	.bias_write_empty_n	(	bias_write_empty_n	)
@@ -379,7 +374,7 @@ module FFN_top #(
 	FFN_if_top #(
 			.IF_SRAM_WORDS_BITS (	IF_SRAM_WORDS_BITS	)
 		,	.IF_SRAM_ADDR_BITS	(	IF_SRAM_ADDR_BITS	)
-	)FFN_if_top_inst(
+	)if_top_inst(
 			.clk	(	clk		)
 		,	.reset	(	reset	)	
 
@@ -407,7 +402,8 @@ module FFN_top #(
 		,	.TBYTE	(	TBYTE	)
 		,	.KER_SRAM_ADDR_BITS		(	KER_SRAM_ADDR_BITS	)
 		,	.KER_SRAM_WORDS_BITS	(	KER_SRAM_WORDS_BITS	)
-	)FFN_ker_top_inst(
+		,	.NUM_BANK				(	PEBLKCOL_NUM		)
+	)ker_top_inst(
 			.clk	(	clk		)
 		,	.reset	(	reset	)
 
@@ -422,15 +418,15 @@ module FFN_top #(
 		,	.ker_write_done			(	ker_write_done			)
 		,	.ker_write_en			(	ker_write_en			)
 		,	.ker_write_last			(	ker_write_last			)
+		,	.ker_write_tile_done	(	ker_write_tile_done		)
 
 		,	.ker_read_start			(	ker_read_start			)
 		,	.ker_read_busy			(	ker_read_busy			)
 		,	.ker_read_done			(	ker_read_done			)
 		,	.ker_read_tile_done		(	ker_read_tile_done		)
 
-		,	.dout_ker_sram_0(dout_ker_sram_0)  , .dout_ker_sram_1(dout_ker_sram_1)	, .dout_ker_sram_2(dout_ker_sram_2)	 , .dout_ker_sram_3(dout_ker_sram_3)  , .dout_ker_sram_4(dout_ker_sram_4)  , .dout_ker_sram_5(dout_ker_sram_5)	, .dout_ker_sram_6(dout_ker_sram_6)	 , .dout_ker_sram_7(dout_ker_sram_7)
-		,	.ker_read_valid_0(ker_read_valid_0), .ker_read_valid_1(ker_read_valid_1), .ker_read_valid_2(ker_read_valid_2), .ker_read_valid_3(ker_read_valid_3), .ker_read_valid_4(ker_read_valid_4), .ker_read_valid_5(ker_read_valid_5), .ker_read_valid_6(ker_read_valid_6), .ker_read_valid_7(ker_read_valid_7)
-		,	.ker_read_final_0(ker_read_final_0), .ker_read_final_1(ker_read_final_1), .ker_read_final_2(ker_read_final_2), .ker_read_final_3(ker_read_final_3), .ker_read_final_4(ker_read_final_4), .ker_read_final_5(ker_read_final_5), .ker_read_final_6(ker_read_final_6), .ker_read_final_7(ker_read_final_7)
+		,	.dout_ker_flat	(	dout_ker_flat	)
+		,	.ker_read_final	(	ker_read_final	)
 
 		,	.cfg_ker_length_sub1		(	cfg_ker_length_sub1			)
 		,	.cfg_ker_readnums			(	cfg_if_token_nums_sub1		)
@@ -443,7 +439,8 @@ module FFN_top #(
 		,	.TBYTE	(	TBYTE	)
 		,	.BIAS_SRAM_ADDR_BITS  ( BIAS_SRAM_ADDR_BITS  )
 		,	.BIAS_SRAM_DATA_WIDTH ( BIAS_SRAM_WORDS_BITS )
-	)FFN_bias_top_inst(
+		,	.NUM_BANK             ( PEBLKCOL_NUM         )
+	)bias_top_inst(
 			.clk	(	clk		)
 		,	.reset	(	reset	)
 
@@ -460,7 +457,7 @@ module FFN_top #(
 		,	.bias_read_busy			(	bias_read_busy		)
 		,	.bias_read_done			(	bias_read_done		)
 
-		,	.dout_bias_sram_0 ( dout_bias_sram_0 ), .dout_bias_sram_1 ( dout_bias_sram_1 ), .dout_bias_sram_2 ( dout_bias_sram_2 ), .dout_bias_sram_3 ( dout_bias_sram_3 ), .dout_bias_sram_4 ( dout_bias_sram_4 ), .dout_bias_sram_5 ( dout_bias_sram_5 ), .dout_bias_sram_6 ( dout_bias_sram_6 ), .dout_bias_sram_7 ( dout_bias_sram_7 )
+		,	.dout_bias_flat ( dout_bias_flat )
 
 		,	.cfg_bias_once_load_size_sub1	(	cfg_bias_once_load_size_sub1	)
 		,	.cfg_bias_readnums				( 	cfg_if_token_nums_sub1			)
@@ -471,7 +468,7 @@ module FFN_top #(
 		,	.TBYTE	(	TBYTE	)
 		,	.PEBLKROW_NUM ( PEBLKROW_NUM )
 		,	.PEBLKCOL_NUM ( PEBLKCOL_NUM )
-	)FFN_pe_top_inst(
+	)pe_top_inst(
 			.clk	(	clk		)
 		,	.reset	(	reset	)
 
@@ -481,10 +478,10 @@ module FFN_top #(
 		,	.cfg_z3					(	config_param01[7  -: 8]		)	// z3
 
 		,	.flat_act_din		(	dout_if_sram_0				)
-		,	.flat_ker_din		(	{dout_ker_sram_0, dout_ker_sram_1, dout_ker_sram_2, dout_ker_sram_3, dout_ker_sram_4, dout_ker_sram_5, dout_ker_sram_6, dout_ker_sram_7}	)
-		,	.flat_bias_din		(	{dout_bias_sram_0, dout_bias_sram_1, dout_bias_sram_2, dout_bias_sram_3, dout_bias_sram_4, dout_bias_sram_5, dout_bias_sram_6, dout_bias_sram_7}	)
+		,	.flat_ker_din		(	dout_ker_flat				)
+		,	.flat_bias_din		(	dout_bias_flat				)
 		,	.flat_valid_din		(	if_read_valid				)
-		,	.flat_final_din		(	ker_read_final_0			)
+		,	.flat_final_din		(	ker_read_final				)
 
 		,	.allq_dout			(	allq_dout					)
 		,	.allvalid_dout		(	allvalid_dout				)
@@ -496,15 +493,13 @@ module FFN_top #(
 		,	.PEBLKROW_NUM	(	PEBLKROW_NUM		)
 		,	.SRAM_DATA_BITS	(	OT_SRAM_WORDS_BITS	)
 		,	.SRAM_ADDR_BITS	(	OT_SRAM_ADDR_BITS	)
-	)FFN_ot_top_inst(
+	)ot_top_inst(
 			.clk	(	clk		)
 		,   .reset	(	reset	)
 
-		,	.FFN_done		(	FFN_done			)
+		,	.FFN_done			(	FFN_done			)
 
 		,	.din_s2mm_tready	(	M_AXIS_S2MM_TREADY	)
-		// ,	.din_s2mm_tready	(	osif_full_n			)
-
 		,	.fifo_full_n		(	osif_full_n			)
 		,	.fifo_write			(	ot2fifo_write		)
 		,	.fifo_last			(	ot2fifo_last		)
@@ -516,35 +511,41 @@ module FFN_top #(
 		,	.data_din	(	allq_dout		)
 
 		,	.cfg_ker_tile_readnums_sub1	(	cfg_ker_tile_readnums_sub1	)
-		,	.cfg_ot_rnd_finsub1			(	cfg_ot_rnd_finsub1			)
-		,	.cfg_ot_tgpfnsub1			(	cfg_ot_tgpfnsub1			)
-		,	.cfg_ot_tcolfnsub1			(	cfg_ot_tcolfnsub1			)
-		,	.cfg_ot_tchafnsub1			(	cfg_ot_tchafnsub1			)
-		,	.cfg_ot_sft_gp				(	cfg_ot_sft_gp				)
-		,	.cfg_ot_sft_colpra			(	cfg_ot_sft_colpra			)
+
+		,	.cfg_ot_rnd_finsub1	(	cfg_ot_rnd_finsub1	)
+		,	.cfg_ot_tgpfnsub1	(	cfg_ot_tgpfnsub1	)
+		,	.cfg_ot_tcolfnsub1	(	cfg_ot_tcolfnsub1	)
+		,	.cfg_ot_tchafnsub1	(	cfg_ot_tchafnsub1	)
+		,	.cfg_ot_sft_gp		(	cfg_ot_sft_gp		)
+		,	.cfg_ot_sft_colpra	(	cfg_ot_sft_colpra	)
+		,	.cfg_ot_sft_col		(	cfg_ot_sft_col		)
 	) ;
 
-    // //----    PE to output instance    -----
+    //----    output AXI-Stream fifo lives in Transformer_top now    -----
 	// OUTPUT_STREAM_if #(
-	// 		.TBITS  (   TBITS   ) 
+	// 		.TBITS  (   TBITS   )
 	// 	,	.TBYTE  (   TBYTE   )
 	// )axififo_out(
-	// 		.ACLK       (   clk 	) 
-	// 	,	.ARESETN    (   resetn  ) 
-	// 	,	.TVALID     (   M_AXIS_S2MM_TVALID  ) 
-	// 	,	.TREADY     (   M_AXIS_S2MM_TREADY  ) 
-	// 	,	.TDATA      (   M_AXIS_S2MM_TDATA   ) 
-	// 	,	.TKEEP      (   M_AXIS_S2MM_TKEEP   ) 
-	// 	,	.TLAST      (   M_AXIS_S2MM_TLAST   )     
+	// 		.ACLK       (   clk 	)
+	// 	,	.ARESETN    (   resetn  )
+	// 	,	.TVALID     (   M_AXIS_S2MM_TVALID  )
+	// 	,	.TREADY     (   M_AXIS_S2MM_TREADY  )
+	// 	,	.TDATA      (   M_AXIS_S2MM_TDATA   )
+	// 	,	.TKEEP      (   M_AXIS_S2MM_TKEEP   )
+	// 	,	.TLAST      (   M_AXIS_S2MM_TLAST   )
 	// 	// ,   .TUSER      (                       )
 
-	// 	,	.osif_data_din  (   ot2fifo_data   	) 
-	// 	,	.osif_strb_din  (   8'hff           ) 
-	// 	,	.osif_last_din  (   ot2fifo_last   	) 
-	// 	,	.osif_user_din  (   1'b0            ) 
-	// 	,	.osif_full_n    (   osif_full_n     ) 
-	// 	,	.osif_write     (   ot2fifo_write   ) 
-	// );  
+	// 	,	.osif_data_din  (   ot2fifo_data   	)
+	// 	,	.osif_strb_din  (   8'hff           )
+	// 	,	.osif_last_din  (   ot2fifo_last   	)
+	// 	,	.osif_user_din  (   1'b0            )
+	// 	,	.osif_full_n    (   osif_full_n     )
+	// 	,	.osif_write     (   ot2fifo_write   )
+	// );
+
+	//----    strb/user are constants at Transformer level    -----
+	assign osif_strb_din = 8'hff ;
+	assign osif_user_din = 1'b0  ;
 
   	// yolo_rst_if_U
     yolo_rst_if #(
@@ -569,5 +570,6 @@ module FFN_top #(
 	assign cfg_ot_tchafnsub1	= config_param15[(63  ) 					-:  OT_SRAM_ADDR_BITS ]		;
 	assign cfg_ot_sft_gp		= config_param15[(63 - OT_SRAM_ADDR_BITS )   -:  OT_SRAM_ADDR_BITS ]	;
 	assign cfg_ot_sft_colpra	= config_param15[(63 - OT_SRAM_ADDR_BITS*2 ) -:  OT_SRAM_ADDR_BITS ]	;
+	assign cfg_ot_sft_col		= config_param15[(63 - OT_SRAM_ADDR_BITS*3 ) -:  OT_SRAM_ADDR_BITS ]	;
 
 endmodule

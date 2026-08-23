@@ -16,13 +16,16 @@
 //      Redundant Columns:          0
 //      Test Muxes                  Off
 //-----------------------------------------------------------------------------
- `define FPGA_SRAM_SETTING
+`ifndef ASIC
+`define FPGA_SRAM_SETTING   // FPGA default; ASIC build passes +define+ASIC -> ASIC SRAM path
+`endif
 
 module FFN_bias_top #(
-	parameter TBITS = 64	
-	,	TBYTE = 8	
+	parameter TBITS = 64
+	,	TBYTE = 8
 	,	BIAS_SRAM_ADDR_BITS = 9
-	,	BIAS_SRAM_DATA_WIDTH = 32	
+	,	BIAS_SRAM_DATA_WIDTH = 32
+	,	NUM_BANK = 8
 )(
 		clk
 	,	reset
@@ -40,14 +43,7 @@ module FFN_bias_top #(
 	,	bias_read_busy 		
 	,	bias_read_done 		
 
-	,	dout_bias_sram_0
-	,	dout_bias_sram_1
-	,	dout_bias_sram_2
-	,	dout_bias_sram_3
-	,	dout_bias_sram_4
-	,	dout_bias_sram_5
-	,	dout_bias_sram_6
-	,	dout_bias_sram_7
+	,	dout_bias_flat
 
     ,	cfg_bias_once_load_size_sub1
     ,   cfg_bias_readnums
@@ -77,32 +73,25 @@ module FFN_bias_top #(
     output wire             bias_read_busy      ;
     output wire             bias_read_done      ;
 
-    output wire [BIAS_SRAM_DATA_WIDTH-1:0] dout_bias_sram_0       ;
-    output wire [BIAS_SRAM_DATA_WIDTH-1:0] dout_bias_sram_1       ;
-    output wire [BIAS_SRAM_DATA_WIDTH-1:0] dout_bias_sram_2       ;
-    output wire [BIAS_SRAM_DATA_WIDTH-1:0] dout_bias_sram_3       ;
-    output wire [BIAS_SRAM_DATA_WIDTH-1:0] dout_bias_sram_4       ;
-    output wire [BIAS_SRAM_DATA_WIDTH-1:0] dout_bias_sram_5       ;
-    output wire [BIAS_SRAM_DATA_WIDTH-1:0] dout_bias_sram_6       ;
-    output wire [BIAS_SRAM_DATA_WIDTH-1:0] dout_bias_sram_7       ;
+    output wire [NUM_BANK*BIAS_SRAM_DATA_WIDTH-1:0] dout_bias_flat ;
 
     input  wire [BIAS_SRAM_ADDR_BITS-1:0] cfg_bias_once_load_size_sub1 ;
     input  wire [2:0] cfg_bias_readnums ; // the number of one bias should be read in once computation
 
-    //---- declare bias_top signal ------
+    //---- declare FFN_bias_top signal ------
     wire cen_bias_sram ;
     wire wen_bias_sram ;
     wire [BIAS_SRAM_ADDR_BITS-1:0] addr_bias_sram ;
     wire [BIAS_SRAM_DATA_WIDTH-1:0] din_bias_sram ;
     wire [BIAS_SRAM_DATA_WIDTH-1:0] dout_bias_sram ;
 
-    //---- declare bias_top write signal ----
+    //---- declare FFN_bias_top write signal ----
     wire write_cen_bias_sram ;
     wire write_wen_bias_sram ;
     wire [BIAS_SRAM_ADDR_BITS-1:0] write_addr_bias_sram ;
     wire [BIAS_SRAM_DATA_WIDTH-1:0] write_din_bias_sram ;
 
-    //---- declare bias_top read signal ----
+    //---- declare FFN_bias_top read signal ----
     wire read_cen_bias_sram ;
     wire [BIAS_SRAM_ADDR_BITS-1:0] read_addr_bias_sram ;
 
@@ -110,13 +99,13 @@ module FFN_bias_top #(
     wire alt_cen_bias_sram ;
     wire alt_wen_bias_sram ;
 
-    //---- bias_top assign cen ----
+    //---- FFN_bias_top assign cen ----
     assign cen_bias_sram = (bias_write_busy) ? write_cen_bias_sram : read_cen_bias_sram;
-    //---- bias_top assign wen ----
+    //---- FFN_bias_top assign wen ----
     assign wen_bias_sram = (bias_write_busy) ? write_wen_bias_sram : 1'd1;
-    //---- bias_top assign addr ----
+    //---- FFN_bias_top assign addr ----
     assign addr_bias_sram = (bias_write_busy) ? write_addr_bias_sram : read_addr_bias_sram;
-    //---- bias_top assign din ----
+    //---- FFN_bias_top assign din ----
     assign din_bias_sram = (bias_write_busy) ? write_din_bias_sram : 32'd0;
 
     //==============================================================================
@@ -126,7 +115,7 @@ module FFN_bias_top #(
         assign alt_cen_bias_sram = ~cen_bias_sram;
         assign alt_wen_bias_sram = ~wen_bias_sram;
 
-        FFN_BRAM_BIAS FFN_bias_0(.clka(clk), .ena(alt_cen_bias_sram), .wea(alt_wen_bias_sram), .addra(addr_bias_sram), .dina(din_bias_sram), .douta(dout_bias_sram));
+        BRAM_BIAS bias_0(.clka(clk), .ena(alt_cen_bias_sram), .wea(alt_wen_bias_sram), .addra(addr_bias_sram), .dina(din_bias_sram), .douta(dout_bias_sram));
     `else
         assign alt_cen_bias_sram = cen_bias_sram;
         assign alt_wen_bias_sram = wen_bias_sram;
@@ -141,7 +130,7 @@ module FFN_bias_top #(
             .TBITS  (   TBITS    )
         ,   .BIAS_SRAM_ADDR_BITS    (   BIAS_SRAM_ADDR_BITS     )
         ,   .BIAS_SRAM_DATA_WIDTH   (   BIAS_SRAM_DATA_WIDTH    )
-    ) FFN_bias_w_inst (
+    ) bias_w_inst (
             .clk    (   clk    )
         ,   .reset  (   reset  )
 
@@ -168,20 +157,14 @@ module FFN_bias_top #(
     FFN_biassram_r #(
             .BIAS_SRAM_ADDR_BITS    (   BIAS_SRAM_ADDR_BITS     )
         ,   .BIAS_SRAM_WORDS_BITS   (   BIAS_SRAM_DATA_WIDTH    )
-    ) FFN_bias_r_inst (
+        ,   .NUM_BANK               (   NUM_BANK                )
+    ) bias_r_inst (
             .clk    (   clk    )
         ,   .reset  (   reset  )
 
         ,   .dout_bias_sram          (   dout_bias_sram          )
 
-        ,   .dout_bias_sram_0        (   dout_bias_sram_0        )
-        ,   .dout_bias_sram_1        (   dout_bias_sram_1        )
-        ,   .dout_bias_sram_2        (   dout_bias_sram_2        )
-        ,   .dout_bias_sram_3        (   dout_bias_sram_3        )
-        ,   .dout_bias_sram_4        (   dout_bias_sram_4        )
-        ,   .dout_bias_sram_5        (   dout_bias_sram_5        )
-        ,   .dout_bias_sram_6        (   dout_bias_sram_6        )
-        ,   .dout_bias_sram_7        (   dout_bias_sram_7        )
+        ,   .dout_bias_flat          (   dout_bias_flat          )
 
         ,   .cen_bias_sram           (   read_cen_bias_sram      )
         ,   .addr_bias_sram          (   read_addr_bias_sram     )

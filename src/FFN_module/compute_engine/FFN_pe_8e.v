@@ -22,11 +22,17 @@
 // `define FPGA_SETTING
 // `define FPGA_ILA_CHK_SETTING
 
-`ifdef FPGA_SRAM_SETTING
-    (* use_dsp = "simd" *)
-`else
-
-`endif
+// ---------------------------------------------------------------------------
+// DSP mapping is controlled PER-SIGNAL below, not module-wide:
+//   - multiply products (stage1_multsigned_pd_*) -> DSP48E1   (* use_dsp = "yes" *)
+//   - adder tree / accumulators                  -> LUT fabric (* use_dsp = "no"  *)
+// Rationale (xc7z020, 16-way PE column):
+//   128 9x9 multiplies = 128 DSP (irreducible without packing). A module-wide
+//   (* use_dsp = "yes"/"simd" *) ALSO packed the ~96 adder/accumulator ops into
+//   DSP48E1 post-adders -> 224 DSP synth (+6 quant black-box = 230 impl) > 220.
+//   Pinning only the multiplies to DSP and pushing the adders into the (idle,
+//   ~10% used) LUT fabric drops the PE array to 128 DSP. Pure synthesis mapping,
+//   no RTL semantic change -> bit-exact.
 
 module FFN_pe_8e #(
 	parameter ELE_BITS = 8 ,	// PE each pixel bits
@@ -158,35 +164,35 @@ module FFN_pe_8e #(
     reg [ELE_BITS-1: 0] stage0_ker_6 ;
     reg [ELE_BITS-1: 0] stage0_ker_7 ;
     
-    //-- stage 1 --//
-    reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_0 ;
-    reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_1 ;
-    reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_2 ;
-    reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_3 ;
-    reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_4 ;
-    reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_5 ;
-    reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_6 ;
-    reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_7 ;
+    //-- stage 1 --//  multiplies pinned to DSP48E1
+    (* use_dsp = "yes" *) reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_0 ;
+    (* use_dsp = "yes" *) reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_1 ;
+    (* use_dsp = "yes" *) reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_2 ;
+    (* use_dsp = "yes" *) reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_3 ;
+    (* use_dsp = "yes" *) reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_4 ;
+    (* use_dsp = "yes" *) reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_5 ;
+    (* use_dsp = "yes" *) reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_6 ;
+    (* use_dsp = "yes" *) reg signed [2*ELE_BITS+1: 0] stage1_multsigned_pd_7 ;
     
-    //-- stage 2 --//
-    reg signed [2*ELE_BITS+2: 0] stage2_addmult_0 ;
-    reg signed [2*ELE_BITS+2: 0] stage2_addmult_1 ;
-    reg signed [2*ELE_BITS+2: 0] stage2_addmult_2 ;
-    reg signed [2*ELE_BITS+2: 0] stage2_addmult_3 ;
-    
+    //-- stage 2 --//  adder tree forced to LUT fabric (off DSP)
+    (* use_dsp = "no" *) reg signed [2*ELE_BITS+2: 0] stage2_addmult_0 ;
+    (* use_dsp = "no" *) reg signed [2*ELE_BITS+2: 0] stage2_addmult_1 ;
+    (* use_dsp = "no" *) reg signed [2*ELE_BITS+2: 0] stage2_addmult_2 ;
+    (* use_dsp = "no" *) reg signed [2*ELE_BITS+2: 0] stage2_addmult_3 ;
+
     //-- stage 3 --//
-    reg signed [2*ELE_BITS+3: 0] stage3_add2_0 ;
-    reg signed [2*ELE_BITS+3: 0] stage3_add2_1 ;
-    
+    (* use_dsp = "no" *) reg signed [2*ELE_BITS+3: 0] stage3_add2_0 ;
+    (* use_dsp = "no" *) reg signed [2*ELE_BITS+3: 0] stage3_add2_1 ;
+
     //-- stage 4 --//
-    reg signed [OUT_BITS-1: 0] stage4_addend_0 ;
-    
-    //-- stage 5 --//
-    reg signed [OUT_BITS-1: 0] stage5_acc_0 ;
-    reg signed [OUT_BITS-1: 0] stage5_accout ;
-    
+    (* use_dsp = "no" *) reg signed [OUT_BITS-1: 0] stage4_addend_0 ;
+
+    //-- stage 5 --//  accumulators forced to LUT fabric (off DSP)
+    (* use_dsp = "no" *) reg signed [OUT_BITS-1: 0] stage5_acc_0 ;
+    (* use_dsp = "no" *) reg signed [OUT_BITS-1: 0] stage5_accout ;
+
     //-- stage 6 --//
-    reg signed [OUT_BITS-1: 0] stage6_ab_0 ;
+    (* use_dsp = "no" *) reg signed [OUT_BITS-1: 0] stage6_ab_0 ;
     
     //--- act unsigned add reg ----
     reg  [ELE_BITS: 0] stage1_addact_ru_0	;

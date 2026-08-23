@@ -29,6 +29,8 @@
 // ============================================================================
 // `define FPGA_SETTING
 // `define FPGA_ILA_CHK_SETTING
+// Phase 3: i-GELU enable is a RUNTIME CFG bit, not a compile switch — see the
+//   quant instances below (cfg_gelu_en = cfg_z3[0]; FFN1=1, FFN2=0).
 
 module FFN_pe_array #(
 	parameter TBITS = 64 
@@ -94,9 +96,13 @@ module FFN_pe_array #(
 	wire 					pass_final_in	[0:PEBLKCOL_NUM-1]	;
 	
 	//----    PE out connection    -----
-	wire 			q_valid		[0:7]	;
-	wire [32-1:0]	mac_result	[0:7]	;
-	wire [32-1:0]	act_sum		[0:7]	;
+	wire 			q_valid		[0:PEBLKCOL_NUM-1]	;
+	wire [32-1:0]	mac_result	[0:PEBLKCOL_NUM-1]	;
+	wire [32-1:0]	act_sum		[0:PEBLKCOL_NUM-1]	;
+
+	//----    flat buses to FFN_getpe_result serializer    -----
+	wire [PEBLKCOL_NUM*(32+1)-1: 0]	pe_result_flat	;
+	wire [PEBLKCOL_NUM*32-1: 0]		pe_actsum_flat	;
 	
 	//----    result get declare    -----
 	wire 			serial_valid	;
@@ -105,53 +111,68 @@ module FFN_pe_array #(
 	
 	genvar gi ;
 	generate
-	    for (gi = 0; gi<PEBLKCOL_NUM; gi=gi+1) begin
-	        assign ker_din[gi] = array_ker_din[(TBITS*(8-gi)-1) -: 64];
-	        assign bias_din[gi] = array_bias_din[(BIAS_BITS*(8-gi)-1) -: 32];
+	    for (gi = 0; gi<PEBLKCOL_NUM; gi=gi+1) begin : ker_slice
+	        assign ker_din[gi]  = array_ker_din[(TBITS*(PEBLKCOL_NUM-gi)-1) -: TBITS];
+	        assign bias_din[gi] = array_bias_din[(BIAS_BITS*(PEBLKCOL_NUM-gi)-1) -: BIAS_BITS];
+
+	        // re-pack registered ker/bias back out in the same MSB-first order
+	        assign pass_array_ker_dout[(TBITS*(PEBLKCOL_NUM-gi)-1) -: TBITS]      = pass_ker_dout[gi]  ;
+	        assign pass_array_bias_dout[(BIAS_BITS*(PEBLKCOL_NUM-gi)-1) -: BIAS_BITS] = pass_bias_dout[gi] ;
+
+	        // flat buses for the serializer (PE index gi in slot gi; order-independent)
+	        assign pe_result_flat[gi*(32+1) +: (32+1)] = { q_valid[gi], mac_result[gi] } ;
+	        assign pe_actsum_flat[gi*32     +: 32]      = act_sum[gi] ;
 	    end
 	endgenerate
 	
-	assign pass_array_ker_dout	= {pass_ker_dout[0], pass_ker_dout[1], pass_ker_dout[2], pass_ker_dout[3], pass_ker_dout[4], pass_ker_dout[5], pass_ker_dout[6], pass_ker_dout[7]}			;
-	assign pass_array_bias_dout	= {pass_bias_dout[0], pass_bias_dout[1], pass_bias_dout[2], pass_bias_dout[3], pass_bias_dout[4], pass_bias_dout[5], pass_bias_dout[6], pass_bias_dout[7]}	;
-	
-	FFN_quan2uint8 FFN_q0(
-			.clk ( clk )  
-		,	.reset 	( reset ) 		
+	// Phase 3: both requantize paths are instantiated; cfg_gelu_en (= cfg_z3[0])
+	// selects between them at RUNTIME, so one compiled design serves both layers:
+	//   FFN1 -> cfg_z3[0]=1 -> i-GELU path ;  FFN2 -> cfg_z3[0]=0 -> plain M0 path.
+	wire        cfg_gelu_en = cfg_z3[0] ;
+	wire [7:0]  qz_m0_dout, qz_gelu_dout ;
+	wire        qz_m0_valid, qz_gelu_valid ;
+
+	// FFN2 (and any non-GELU layer): original M0 requantize
+	FFN_quan2uint8 q0_m0(
+			.clk ( clk )
+		,	.reset 	( reset )
 		,	.m0_scale		(	cfg_m0_scale 		)
 		,	.index			(	cfg_index 			)
 		,	.z_of_weight	(	cfg_z_of_weight		)
 		,	.valid_in		(	serial_valid	)
 		,	.serial32_in	(	serial_conv		)
 		,	.act_sum_in		(	serial_actsum	)
-		,	.q_out			(	q_result_dout	)
-		,	.valid_out		(	valid_dout		)
+		,	.q_out			(	qz_m0_dout		)
+		,	.valid_out		(	qz_m0_valid		)
 	);
+
+	// FFN1: I-BERT i-GELU + requantize (bit-exact to tools/FFN1_igelu_out.dat)
+	FFN_quan2uint8_gelu q0_gelu(
+			.clk ( clk )
+		,	.reset 	( reset )
+		,	.z_of_weight	(	cfg_z_of_weight		)
+		,	.valid_in		(	serial_valid	)
+		,	.serial32_in	(	serial_conv		)
+		,	.act_sum_in		(	serial_actsum	)
+		,	.q_out			(	qz_gelu_dout	)
+		,	.valid_out		(	qz_gelu_valid	)
+	);
+
+	assign q_result_dout = cfg_gelu_en ? qz_gelu_dout  : qz_m0_dout  ;
+	assign valid_dout    = cfg_gelu_en ? qz_gelu_valid : qz_m0_valid ;
 	
 	FFN_getpe_result #(
 			.INV_BITS(	1 	) 	// input valid bits
 		,	.OUTQ_BITS(	32 	) 	// output bits for quantization
-	)FFN_gr00(
-			.clk ( clk )  
-		,	.reset ( reset ) 			
-		,	.pe0_result 		(	{	q_valid[0]	,mac_result[0]	}	)
-		,	.pe1_result 		(	{	q_valid[1]	,mac_result[1]	}	)
-		,	.pe2_result 		(	{	q_valid[2]	,mac_result[2]	}	)
-		,	.pe3_result 		(	{	q_valid[3]	,mac_result[3]	}	)
-		,	.pe4_result 		(	{	q_valid[4]	,mac_result[4]	}	)
-		,	.pe5_result 		(	{	q_valid[5]	,mac_result[5]	}	)
-		,	.pe6_result 		(	{	q_valid[6]	,mac_result[6]	}	)
-		,	.pe7_result 		(	{	q_valid[7]	,mac_result[7]	}	)
-		,	.pe0_actsum 		(	act_sum[0]	)
-		,	.pe1_actsum 		(	act_sum[1]	)
-		,	.pe2_actsum 		(	act_sum[2]	)
-		,	.pe3_actsum 		(	act_sum[3]	)
-		,	.pe4_actsum 		(	act_sum[4]	)
-		,	.pe5_actsum 		(	act_sum[5]	)
-		,	.pe6_actsum 		(	act_sum[6]	)
-		,	.pe7_actsum 		(	act_sum[7]	)
-		,	.valid_out 			(	serial_valid		)
-		,	.serial_result 		(	serial_conv			)
-		,	.serial_actresult 	(	serial_actsum		)
+		,	.NUM_PE(	PEBLKCOL_NUM	)
+	)gr00(
+			.clk ( clk )
+		,	.reset ( reset )
+		,	.pe_result_flat		(	pe_result_flat	)
+		,	.pe_actsum_flat		(	pe_actsum_flat	)
+		,	.valid_out 			(	serial_valid	)
+		,	.serial_result 		(	serial_conv		)
+		,	.serial_actresult 	(	serial_actsum	)
 	);
 	
 	//==============================================================================
@@ -163,7 +184,7 @@ module FFN_pe_array #(
 			.ELE_BITS(	8 	)
 		,   .OUT_BITS(	32	)
 		,   .BIAS_BITS(	32	) 
-	)FFN_pe_col0(
+	)pe_col0(
 	        .clk ( clk )     
 	    ,   .reset ( reset )
 	
@@ -209,7 +230,7 @@ module FFN_pe_array #(
 					.ELE_BITS(	8 	)
 				,   .OUT_BITS(	32	)
 				,   .BIAS_BITS(	32	) 
-			)FFN_pe_col1(
+			)pe_col1(
 					.clk ( clk )     
 	    		,   .reset ( reset )
 			

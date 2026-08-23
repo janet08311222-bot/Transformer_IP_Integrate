@@ -6,125 +6,82 @@
 // 		sent to quantization module.
 // 		0921: new act sum pallel to serial each PE
 // ============================================================================
+// Modified : 2026 -- parameterized for NUM_PE columns (Phase 0 of PE-col scaling)
+//   The systolic PE chain guarantees at most one column asserts its valid in
+//   any given cycle (results emerge one cycle apart), so the previous one-hot
+//   case-mux is replaced by an OR-reduce over all columns. This is bit-exact
+//   to the old 8-way version for every reachable (one-hot / all-zero) input,
+//   and now scales to any NUM_PE with a single parameter.
+// ============================================================================
 
 
 module FFN_getpe_result #(
-	parameter INV_BITS = 1 ,		// input valid bits
-	parameter OUTQ_BITS = 32		// output bits for quantization
+	parameter INV_BITS  = 1 ,		// input valid bits
+	parameter OUTQ_BITS = 32,		// output bits for quantization
+	parameter NUM_PE    = 8			// number of PE columns to serialize
 ) (
-		clk			
-	,	reset				
-	,	pe0_result 			
-	,	pe1_result 			
-	,	pe2_result 			
-	,	pe3_result 			
-	,	pe4_result 			
-	,	pe5_result 			
-	,	pe6_result 			
-	,	pe7_result 			
-	,	pe0_actsum 			
-	,	pe1_actsum 			
-	,	pe2_actsum 			
-	,	pe3_actsum 			
-	,	pe4_actsum 			
-	,	pe5_actsum 			
-	,	pe6_actsum 			
-	,	pe7_actsum 			
-	,	valid_out 			
-	,	serial_result 		
-	,	serial_actresult 	
+		clk
+	,	reset
+	,	pe_result_flat		// {valid, mac[OUTQ_BITS-1:0]} per PE, PE0 in LSB slot
+	,	pe_actsum_flat		// actsum[OUTQ_BITS-1:0] per PE,        PE0 in LSB slot
+	,	valid_out
+	,	serial_result
+	,	serial_actresult
 );
+
+	localparam RES_BITS = OUTQ_BITS + INV_BITS ;
 
 	//==============================================================================
 	//========    I/O port declare    ========
 	//==============================================================================
-	
-	input wire			clk 		;
-	input wire			reset 		;
-	input wire	[ OUTQ_BITS + INV_BITS - 1 : 0 ]		pe0_result 		;
-	input wire	[ OUTQ_BITS + INV_BITS - 1 : 0 ]		pe1_result 		;
-	input wire	[ OUTQ_BITS + INV_BITS - 1 : 0 ]		pe2_result 		;
-	input wire	[ OUTQ_BITS + INV_BITS - 1 : 0 ]		pe3_result 		;
-	input wire	[ OUTQ_BITS + INV_BITS - 1 : 0 ]		pe4_result 		;
-	input wire	[ OUTQ_BITS + INV_BITS - 1 : 0 ]		pe5_result 		;
-	input wire	[ OUTQ_BITS + INV_BITS - 1 : 0 ]		pe6_result 		;
-	input wire	[ OUTQ_BITS + INV_BITS - 1 : 0 ]		pe7_result 		;
-	input wire	[ OUTQ_BITS - 1 : 0 ]		pe0_actsum 		;
-	input wire	[ OUTQ_BITS - 1 : 0 ]		pe1_actsum 		;
-	input wire	[ OUTQ_BITS - 1 : 0 ]		pe2_actsum 		;
-	input wire	[ OUTQ_BITS - 1 : 0 ]		pe3_actsum 		;
-	input wire	[ OUTQ_BITS - 1 : 0 ]		pe4_actsum 		;
-	input wire	[ OUTQ_BITS - 1 : 0 ]		pe5_actsum 		;
-	input wire	[ OUTQ_BITS - 1 : 0 ]		pe6_actsum 		;
-	input wire	[ OUTQ_BITS - 1 : 0 ]		pe7_actsum 		;
-	
-	output reg						valid_out 		;
-	output reg	[ OUTQ_BITS - 1: 0 ]			serial_result		;
-	output reg	[ OUTQ_BITS - 1: 0 ]			serial_actresult		;
-	
+
+	input wire							clk 			;
+	input wire							reset 			;
+	input wire	[ NUM_PE*RES_BITS  - 1 : 0 ]	pe_result_flat	;
+	input wire	[ NUM_PE*OUTQ_BITS - 1 : 0 ]	pe_actsum_flat	;
+
+	output reg							valid_out 			;
+	output reg	[ OUTQ_BITS - 1: 0 ]	serial_result		;
+	output reg	[ OUTQ_BITS - 1: 0 ]	serial_actresult	;
+
 	//-----------------------------------------------------------------------------
 	//----    declare    -----
-	wire [ 7:0 ] valid_in ;
-	reg signed [ 31 : 0 ] data_choose ;
-	reg signed [ 31 : 0 ] actsum_choose ;
-	
+	integer i ;
+	reg						any_valid 		;
+	reg signed [ OUTQ_BITS-1 : 0 ]	data_choose 	;
+	reg signed [ OUTQ_BITS-1 : 0 ]	actsum_choose 	;
+
 	//-----------------------------------------------------------------------------
-	
-	assign valid_in = { 
-		pe0_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],
-		pe1_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],
-		pe2_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],
-		pe3_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],
-		pe4_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],
-		pe5_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],
-		pe6_result[ OUTQ_BITS + INV_BITS-1  -: 1 ],
-		pe7_result[ OUTQ_BITS + INV_BITS-1  -: 1 ]
-		}	;
-	
+	//----    one-hot select via OR-reduce (chain guarantees <=1 valid/cycle)  ----
 	always@(*)begin
-		case (valid_in)
-			8'b1000_0000: data_choose = { pe0_result[ OUTQ_BITS -1  -: 32 ]};
-			8'b0100_0000: data_choose = { pe1_result[ OUTQ_BITS -1  -: 32 ]};
-			8'b0010_0000: data_choose = { pe2_result[ OUTQ_BITS -1  -: 32 ]};
-			8'b0001_0000: data_choose = { pe3_result[ OUTQ_BITS -1  -: 32 ]};
-			8'b0000_1000: data_choose = { pe4_result[ OUTQ_BITS -1  -: 32 ]};
-			8'b0000_0100: data_choose = { pe5_result[ OUTQ_BITS -1  -: 32 ]};
-			8'b0000_0010: data_choose = { pe6_result[ OUTQ_BITS -1  -: 32 ]};
-			8'b0000_0001: data_choose = { pe7_result[ OUTQ_BITS -1  -: 32 ]};
-			default: data_choose = 32'd0 ;
-		endcase
+		any_valid     = 1'b0 ;
+		data_choose   = {OUTQ_BITS{1'b0}} ;
+		actsum_choose = {OUTQ_BITS{1'b0}} ;
+		for( i = 0 ; i < NUM_PE ; i = i + 1 )begin
+			if( pe_result_flat[ i*RES_BITS + OUTQ_BITS ] )begin	// this PE's valid bit
+				data_choose   = data_choose   | pe_result_flat[ i*RES_BITS  +: OUTQ_BITS ] ;
+				actsum_choose = actsum_choose | pe_actsum_flat[ i*OUTQ_BITS +: OUTQ_BITS ] ;
+				any_valid     = 1'b1 ;
+			end
+		end
 	end
-	
-	always@(*)begin
-		case (valid_in)
-			8'b1000_0000: actsum_choose = pe0_actsum;
-			8'b0100_0000: actsum_choose = pe1_actsum;
-			8'b0010_0000: actsum_choose = pe2_actsum;
-			8'b0001_0000: actsum_choose = pe3_actsum;
-			8'b0000_1000: actsum_choose = pe4_actsum;
-			8'b0000_0100: actsum_choose = pe5_actsum;
-			8'b0000_0010: actsum_choose = pe6_actsum;
-			8'b0000_0001: actsum_choose = pe7_actsum;
-			default: actsum_choose = 32'd0 ;
-		endcase
-	end
-	
+
 	always@( posedge clk )begin
 		if(reset)begin
-			serial_result <= 32'd0 ;
-			serial_actresult <= 32'd0 ;
-			valid_out <= 0;
+			serial_result    <= {OUTQ_BITS{1'b0}} ;
+			serial_actresult <= {OUTQ_BITS{1'b0}} ;
+			valid_out        <= 1'b0 ;
 		end
 		else begin
-			if(  valid_in != 8'd0 )begin
-				serial_result <= data_choose ;
+			if( any_valid )begin
+				serial_result    <= data_choose ;
 				serial_actresult <= actsum_choose ;
-				valid_out <= 1;
+				valid_out        <= 1'b1 ;
 			end
 			else begin
-				serial_result <= 32'd0;
-				serial_actresult <= 32'd0;
-				valid_out <= 0;
+				serial_result    <= {OUTQ_BITS{1'b0}} ;
+				serial_actresult <= {OUTQ_BITS{1'b0}} ;
+				valid_out        <= 1'b0 ;
 			end
 		end
 	end

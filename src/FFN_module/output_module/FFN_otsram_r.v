@@ -17,7 +17,7 @@ module FFN_otsram_r #(
 	,	busy
 	,	done
 
-    ,   FFN_done
+	,	FFN_done
 
 	,	din_s2mm_tready
 	,	fifo_full_n
@@ -29,13 +29,14 @@ module FFN_otsram_r #(
 	,	addr_otsr
 	,	cen_otsr
 
-    ,	cfg_ker_tile_readnums_sub1
+	,	cfg_ker_tile_readnums_sub1
 
 	,	cfg_ot_tgpfnsub1
 	,	cfg_ot_tcolfnsub1
 	,	cfg_ot_tchafnsub1
 	,	cfg_ot_sft_gp
 	,	cfg_ot_sft_colpra
+	,	cfg_ot_sft_col
 
 );
 
@@ -46,8 +47,8 @@ module FFN_otsram_r #(
 	output	wire 	busy	;
 	output	reg 	done	;
 
-    output  wire    FFN_done ;
-	
+	output	wire	FFN_done ;	// asserted after the LAST kernel tile's readout -> whole FFN layer finished
+
 	input	wire 	din_s2mm_tready ;
 	input	wire 	fifo_full_n	    ;
 	output	wire 	fifo_write	    ;
@@ -58,13 +59,14 @@ module FFN_otsram_r #(
 	output [SRAM_ADDR_BITS-1:0]		addr_otsr	    ;
 	input wire [SRAM_DATA_BITS-1:0] data_from_sram  ;
 
-    input wire [1:0]					cfg_ker_tile_readnums_sub1	;
+	input wire [1:0]				cfg_ker_tile_readnums_sub1	;// number of kernel tiles - 1 (FFN1 4-1, FFN2 1-1)
 
 	input wire [SRAM_ADDR_BITS-1:0]	cfg_ot_tgpfnsub1	;// counter for column group. col_out /8 -1= 16/8-1= 1 // FFN1 non
 	input wire [SRAM_ADDR_BITS-1:0]	cfg_ot_tcolfnsub1	;// counter for column in PE column parallel number . 8-1=7 // FFN1 8-1=7
 	input wire [SRAM_ADDR_BITS-1:0]	cfg_ot_tchafnsub1	;// counter for output channel divide 8  . ch_out/8-1= 64/8-1 = 7 // FFN1 64-1 = 63
 	input wire [SRAM_ADDR_BITS-1:0]	cfg_ot_sft_gp		;// shifter for each column group address in output SRAM, 8col_parallel* ch_out /8 = 8*64/8=64 // FFN1 non
 	input wire [SRAM_ADDR_BITS-1:0]	cfg_ot_sft_colpra	;// shifter for total PE column parallel number = 8 // FFN1 8
+	input wire [SRAM_ADDR_BITS-1:0]	cfg_ot_sft_col		;// shifter for the ct_col counter (1 = legacy 8-way; >1 needed when a column-group spans >1 output word, e.g. 16-way -> 16)
     //-----------------------------------------------------------------------------
     //------	Declare		-----------------------------------------------------
 
@@ -76,7 +78,7 @@ module FFN_otsram_r #(
 	wire fsm_rstcnt	;
 	wire acnt_rst		;
 
-    wire [1:0]	ct_FFN	;
+	wire [1:0]	ct_FFN	;
 
 	wire [SRAM_ADDR_BITS-1:0]ct_gp	;
 	wire [SRAM_ADDR_BITS-1:0]ct_gp_finnumsub1	;
@@ -228,7 +230,7 @@ module FFN_otsram_r #(
         else begin
             shtidx_cha	<= ct_cha * cfg_ot_sft_colpra ;
             shtidx_gp	<= ct_gp * cfg_ot_sft_gp ;
-            shtidx_col	<= ct_col  ;
+            shtidx_col	<= ct_col * cfg_ot_sft_col ;
         end
     end
 
@@ -247,6 +249,7 @@ module FFN_otsram_r #(
     assign fsm_rstcnt	= (addr_curr_state== RST_CNT) ? 1'd1 : 1'd0 ;
     assign acnt_rst		= reset | fsm_rstcnt ;
 
+    //----    layer-level done : counts kernel tiles finished streaming out    -----
     count_yi_v4 #(
         .BITS_OF_END_NUMBER (	2	)
     )FFN_done_inst(

@@ -24,12 +24,13 @@ module FFN_schedule_ctrl #(
 	,	if_read_busy 
 	,	if_read_done	
 
-	,	ker_write_start	
-	,	ker_write_busy	
-	,	ker_write_done	
+	,	ker_write_start
+	,	ker_write_busy
+	,	ker_write_done
 	,	ker_write_last
+	,	ker_write_tile_done
 
-	,	ker_read_start	
+	,	ker_read_start
 	,	ker_read_busy 	
     ,   ker_read_done
 	,	ker_read_tile_done
@@ -73,6 +74,7 @@ module FFN_schedule_ctrl #(
 	input wire	ker_write_done 		;
 	input wire	ker_write_busy 		;
 	input wire  ker_write_last		;
+	input wire  ker_write_tile_done	;
 
 	output reg	ker_read_start		;
 	input wire	ker_read_done 		;
@@ -111,6 +113,17 @@ module FFN_schedule_ctrl #(
 	localparam BK_OUT		= 3'd3;	// s2mm output state
 	localparam BK_RDWEIGHT 	= 3'd4; // read weight state
 	localparam BK_DONE		= 3'd5;
+
+	//---- gate BK_RDWT->BK_BIWT until BOTH the kernel READ (compute, ker_read_tile_done)
+	//     and the kernel WRITE prefetch chunk (ker_write_tile_done) for the tile are done.
+	//     16-way halves tile_size so compute finishes ~2x before the kernel-write chunk
+	//     drains; the old transition (ker_read_tile_done only) let the bias write start
+	//     while kernel data was still streaming -> kernel data corrupted the bias SRAM
+	//     (kernel/bias write overlap through FFN_d_empn_rd_mux). 8-way: both pulses fire
+	//     together, so this is behavior-preserving there.
+	reg  rd_tile_done_l ;
+	reg  wr_tile_done_l ;
+	wire bk_rdwt_done = ( rd_tile_done_l | ker_read_tile_done ) & ( wr_tile_done_l | ker_write_tile_done ) ;
 	//==============================================================================
 	//========    first load FSM and fsld_done    ========
 	//==============================================================================
@@ -166,7 +179,7 @@ module FFN_schedule_ctrl #(
     always @(*) begin
         case (block_curr_state)
             BK_IDLE 	:	block_next_state = ( mast_curr_state == M_BASE ) ? BK_RDWT : BK_IDLE ;
-            BK_RDWT     :   block_next_state = ( ker_write_last ) ? BK_RDWEIGHT : ( ker_read_tile_done ) ? BK_BIWT : BK_RDWT ;
+            BK_RDWT     :   block_next_state = ( ker_write_last ) ? BK_RDWEIGHT : ( bk_rdwt_done ) ? BK_BIWT : BK_RDWT ;
             BK_BIWT     :   block_next_state = ( bias_write_done ) ? BK_OUT : BK_BIWT ;
 			BK_OUT		:	block_next_state = ( chk_ot_ready ) ? BK_RDWT : BK_OUT ;
 			BK_RDWEIGHT	:	block_next_state = ( ker_read_done ) ? BK_DONE : BK_RDWEIGHT ;
@@ -181,6 +194,20 @@ module FFN_schedule_ctrl #(
 			base_done = 1'd1;
 		else
 			base_done = 1'd0;
+	end
+
+	//----    latch the per-tile read/write done pulses within one BK_RDWT    -----
+	//   cleared whenever not in BK_RDWT so each tile starts fresh; bk_rdwt_done
+	//   (above) asserts once both have been seen -> only then start the bias write.
+	always @(posedge clk) begin
+		if( reset || block_curr_state != BK_RDWT ) begin
+			rd_tile_done_l <= 1'b0 ;
+			wr_tile_done_l <= 1'b0 ;
+		end
+		else begin
+			if( ker_read_tile_done  ) rd_tile_done_l <= 1'b1 ;
+			if( ker_write_tile_done ) wr_tile_done_l <= 1'b1 ;
+		end
 	end
 
     //=========================== input control ===============
@@ -219,7 +246,7 @@ module FFN_schedule_ctrl #(
     	if (reset)
             bias_write_start <= 1'd0 ;
     	else
-            bias_write_start <= ( fsld_curr_state == FS_BIAS || block_curr_state == BK_BIWT ) ? ((!bias_write_busy) && (!bias_write_done)) : 1'd0;
+            bias_write_start <= ( fsld_curr_state == FS_BIAS || block_curr_state == BK_BIWT ) ? ((!bias_write_busy) && (!bias_write_done) && (!ker_write_busy)) : 1'd0;
     end
 
 	always @(*) begin

@@ -1,6 +1,6 @@
 // -----------------------------------------------------------------------------
-// Module Name  : biassram_w
-// File         : biassram_w.v
+// Module Name  : FFN_biassram_w
+// File         : FFN_biassram_w.v
 // Author       : Chao-Ping Liu
 // Create Date  : 2024.07.03
 // Version      : 1.0

@@ -1,0 +1,7 @@
+xsim.dir/
+*.jou
+*.pb
+*.log
+*.wdb
+sim/work/
+webtalk*

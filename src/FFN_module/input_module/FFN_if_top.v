@@ -16,7 +16,9 @@
 //      Redundant Columns:          0
 //      Test Muxes                  Off
 //-----------------------------------------------------------------------------
- `define FPGA_SRAM_SETTING
+`ifndef ASIC
+`define FPGA_SRAM_SETTING   // FPGA default; ASIC build passes +define+ASIC -> ASIC SRAM path
+`endif
 
 module FFN_if_top #(
 	parameter IF_SRAM_WORDS_BITS = 64 
@@ -67,19 +69,19 @@ module FFN_if_top #(
 
     input  wire [IF_SRAM_ADDR_BITS-1:0]  cfg_if_totalsize_sub1   ;
 
-    //---- declare if_top signal ------ 
+    //---- declare FFN_if_top signal ------ 
     wire cen_if_sram_0 ;
     wire wen_if_sram_0 ;
     wire [IF_SRAM_ADDR_BITS-1:0] addr_if_sram_0 ;
     wire [IF_SRAM_WORDS_BITS-1:0] din_if_sram_0 ;
 
-    //---- declare if_top write signal ----
+    //---- declare FFN_if_top write signal ----
     wire write_cen_if_sram_0 ;
     wire write_wen_if_sram_0 ;
     wire [IF_SRAM_ADDR_BITS-1:0] write_addr_if_sram_0 ;
     wire [IF_SRAM_WORDS_BITS-1:0] write_din_if_sram_0  ;
 
-    //---- declare if_top read signal ----
+    //---- declare FFN_if_top read signal ----
     wire read_cen_if_sram_0 ;
     wire [IF_SRAM_ADDR_BITS-1:0] read_addr_if_sram_0 ;
 
@@ -88,13 +90,13 @@ module FFN_if_top #(
 	wire atl_cen_if_0 ;
 	wire atl_wen_if_0 ;
 
-    //---- if_top assign cen ------ 
+    //---- FFN_if_top assign cen ------ 
     assign cen_if_sram_0 = ( if_write_busy ) ? write_cen_if_sram_0 : read_cen_if_sram_0 ;
-    //---- if_top assign wen ------ 
+    //---- FFN_if_top assign wen ------ 
     assign wen_if_sram_0 = ( if_write_busy ) ? write_wen_if_sram_0 : 1'd1 ;
-    //---- if_top assign addr ------ 
+    //---- FFN_if_top assign addr ------ 
     assign addr_if_sram_0 =  ( if_write_busy ) ? write_addr_if_sram_0 : read_addr_if_sram_0 ;
-    //---- if_top assign din ------ 
+    //---- FFN_if_top assign din ------ 
     assign din_if_sram_0 =  ( if_write_busy ) ? write_din_if_sram_0 : 64'd0 ;
 
     //==============================================================================
@@ -105,7 +107,7 @@ module FFN_if_top #(
         assign atl_cen_if_0 = ~cen_if_sram_0	;
         assign atl_wen_if_0 = ~wen_if_sram_0	;
 
-        FFN_BRAM_IF FFN_if_0 (.clka( clk ), .ena( atl_cen_if_0 ), .wea( atl_wen_if_0 ), .addra( addr_if_sram_0 ), .dina( din_if_sram_0 ), .douta( dout_if_sram_0 ));
+        BRAM_IF if_0 (.clka( clk ), .ena( atl_cen_if_0 ), .wea( atl_wen_if_0 ), .addra( addr_if_sram_0 ), .dina( din_if_sram_0 ), .douta( dout_if_sram_0 ));
     `else 
         assign atl_cen_if_0 = cen_if_sram_0	;
         assign atl_wen_if_0 = wen_if_sram_0	;
@@ -119,7 +121,7 @@ module FFN_if_top #(
     FFN_ifsram_w #(
         .IF_SRAM_WORDS_BITS ( IF_SRAM_WORDS_BITS    )
     ,   .IF_SRAM_ADDR_BITS  ( IF_SRAM_ADDR_BITS     )
-    )FFN_ifsram_write(
+    )ifsram_write(
         .clk    (   clk     )
     ,   .reset  (   reset   )
 
@@ -146,7 +148,7 @@ module FFN_if_top #(
     FFN_ifsram_r #(
         .IF_SRAM_WORDS_BITS ( IF_SRAM_WORDS_BITS    )
     ,   .IF_SRAM_ADDR_BITS  ( IF_SRAM_ADDR_BITS     )
-    )FFN_ifsram_read(
+    )ifsram_read(
         .clk    (   clk     )
     ,   .reset  (   reset   )
 

@@ -4,16 +4,25 @@
 // Ver      : 1.0
 // Func     : kernel sram read module
 // ============================================================================
+// Modified : 2026 -- parameterized bank count (Phase 1a of PE-col scaling).
+//   The per-bank read-enable / address form a 1-cycle staggered shift chain
+//   (bank b is read one cycle after bank b-1) feeding the systolic PE column
+//   chain. The previous fixed 8-bank version is reproduced exactly here as a
+//   generate over NUM_BANK; control FSM and counters are unchanged. cen/addr
+//   are exposed as packed buses (bank 0 in the LSB slot) so the count scales
+//   with a single parameter.
+// ============================================================================
 
 module FFN_kersram_r #(
-    parameter KER_SRAM_WORDS_BITS = 64 
+    parameter KER_SRAM_WORDS_BITS = 64
     ,   KER_SRAM_ADDR_BITS = 9
+    ,   NUM_BANK = 8
 )(
         clk
     ,   reset
 
-    ,   cen_ker_sram_0,  cen_ker_sram_1,  cen_ker_sram_2,  cen_ker_sram_3,  cen_ker_sram_4,  cen_ker_sram_5,  cen_ker_sram_6,  cen_ker_sram_7
-    ,   addr_ker_sram_0, addr_ker_sram_1, addr_ker_sram_2, addr_ker_sram_3, addr_ker_sram_4, addr_ker_sram_5, addr_ker_sram_6, addr_ker_sram_7
+    ,   cen_ker_flat        // [NUM_BANK-1:0]              bank b -> bit b
+    ,   addr_ker_flat       // [NUM_BANK*ADDR_BITS-1:0]    bank b -> slot b
 
     ,   ker_read_start
     ,   ker_read_busy
@@ -25,13 +34,13 @@ module FFN_kersram_r #(
     ,   cfg_ker_readnums
     ,   cfg_ker_tile_size_sub1
 );
-    
+
     // ============================= I/O port Declare ===============================
     input wire clk ;
     input wire reset ;
 
-    output reg                            cen_ker_sram_0,  cen_ker_sram_1,  cen_ker_sram_2,  cen_ker_sram_3,  cen_ker_sram_4,  cen_ker_sram_5,  cen_ker_sram_6,  cen_ker_sram_7 ;
-    output reg [KER_SRAM_ADDR_BITS-1:0]   addr_ker_sram_0, addr_ker_sram_1, addr_ker_sram_2, addr_ker_sram_3, addr_ker_sram_4, addr_ker_sram_5, addr_ker_sram_6, addr_ker_sram_7 ;
+    output reg [NUM_BANK-1:0]                     cen_ker_flat  ;
+    output reg [NUM_BANK*KER_SRAM_ADDR_BITS-1:0]  addr_ker_flat ;
 
     input wire                            ker_read_start        ;
     output reg                            ker_read_busy         ;
@@ -84,48 +93,43 @@ module FFN_kersram_r #(
         ker_read_done = (ker_read_curr_state == KER_READ_DONE) ? 1'b1 : 1'b0;
     end
 
+    //==========================================================================
+    //==== staggered read shift chain : bank b is delayed 1 cycle from b-1  =====
+    //==========================================================================
+    // bank 0 driven from the FSM/counter; banks 1..NUM_BANK-1 each register the
+    // previous bank's cen/addr -- identical to the old hand-unrolled 8-bank code.
+    reg [NUM_BANK-1:0]                    cen_chain  ;
+    reg [KER_SRAM_ADDR_BITS-1:0]          addr_chain [0:NUM_BANK-1] ;
+
+    integer ci ;
     always @(posedge clk) begin
         if(reset) begin
-            cen_ker_sram_0 <= 1'b1;
-            cen_ker_sram_1 <= 1'b1;
-            cen_ker_sram_2 <= 1'b1;
-            cen_ker_sram_3 <= 1'b1;
-            cen_ker_sram_4 <= 1'b1;
-            cen_ker_sram_5 <= 1'b1;
-            cen_ker_sram_6 <= 1'b1;
-            cen_ker_sram_7 <= 1'b1;
+            cen_chain <= {NUM_BANK{1'b1}} ;
         end
         else begin
-            cen_ker_sram_0 <= (ker_read_curr_state == KER_READ_BUSY && en_ker_addrct) ? 1'b0 : 1'b1;
-            cen_ker_sram_1 <= cen_ker_sram_0 ;
-            cen_ker_sram_2 <= cen_ker_sram_1 ;
-            cen_ker_sram_3 <= cen_ker_sram_2 ;
-            cen_ker_sram_4 <= cen_ker_sram_3 ;
-            cen_ker_sram_5 <= cen_ker_sram_4 ;
-            cen_ker_sram_6 <= cen_ker_sram_5 ;
-            cen_ker_sram_7 <= cen_ker_sram_6 ;
+            cen_chain[0] <= (ker_read_curr_state == KER_READ_BUSY && en_ker_addrct) ? 1'b0 : 1'b1;
+            for (ci = 1; ci < NUM_BANK; ci = ci + 1)
+                cen_chain[ci] <= cen_chain[ci-1] ;
         end
     end
     always @(posedge clk) begin
         if(reset) begin
-            addr_ker_sram_0 <= 'd0;
-            addr_ker_sram_1 <= 'd0;
-            addr_ker_sram_2 <= 'd0;
-            addr_ker_sram_3 <= 'd0;
-            addr_ker_sram_4 <= 'd0;
-            addr_ker_sram_5 <= 'd0;
-            addr_ker_sram_6 <= 'd0;
-            addr_ker_sram_7 <= 'd0;
+            for (ci = 0; ci < NUM_BANK; ci = ci + 1)
+                addr_chain[ci] <= 'd0 ;
         end
         else begin
-            addr_ker_sram_0 <= (ker_read_curr_state == KER_READ_BUSY && en_ker_addrct) ? ker_addrct : 'd0 ;
-            addr_ker_sram_1 <= addr_ker_sram_0 ;
-            addr_ker_sram_2 <= addr_ker_sram_1 ;
-            addr_ker_sram_3 <= addr_ker_sram_2 ;
-            addr_ker_sram_4 <= addr_ker_sram_3 ;
-            addr_ker_sram_5 <= addr_ker_sram_4 ;
-            addr_ker_sram_6 <= addr_ker_sram_5 ;
-            addr_ker_sram_7 <= addr_ker_sram_6 ;
+            addr_chain[0] <= (ker_read_curr_state == KER_READ_BUSY && en_ker_addrct) ? ker_addrct : 'd0 ;
+            for (ci = 1; ci < NUM_BANK; ci = ci + 1)
+                addr_chain[ci] <= addr_chain[ci-1] ;
+        end
+    end
+
+    // pack chain -> output buses (bank b in slot b)
+    integer pi ;
+    always @(*) begin
+        for (pi = 0; pi < NUM_BANK; pi = pi + 1) begin
+            cen_ker_flat[pi]                              = cen_chain[pi] ;
+            addr_ker_flat[pi*KER_SRAM_ADDR_BITS +: KER_SRAM_ADDR_BITS] = addr_chain[pi] ;
         end
     end
 
