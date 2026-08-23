@@ -734,22 +734,22 @@ if_dout_mux #( .DATA_WIDTH( TBITS) )id_mux_r1_7(.data_valid(dy_dout_valid_7),.di
 `endif
 
 `ifdef FPGA_SRAM_SETTING
-	BRAM_IF if0bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_0), .enb(atlrA_cen_0), .wea(atl_wenA_0), .addra(addrwA_0), .addrb(addrrA_0), .dina(dinwA_0), .douta(), .doutb(doutrA_0) );
-	BRAM_IF if0bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_0), .enb(atlrB_cen_0), .wea(atl_wenB_0), .addra(addrwB_0), .addrb(addrrB_0), .dina(dinwB_0), .douta(), .doutb(doutrB_0) );
-	BRAM_IF if1bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_1), .enb(atlrA_cen_1), .wea(atl_wenA_1), .addra(addrwA_1), .addrb(addrrA_1), .dina(dinwA_1), .douta(), .doutb(doutrA_1) );
-	BRAM_IF if1bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_1), .enb(atlrB_cen_1), .wea(atl_wenB_1), .addra(addrwB_1), .addrb(addrrB_1), .dina(dinwB_1), .douta(), .doutb(doutrB_1) );
-	BRAM_IF if2bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_2), .enb(atlrA_cen_2), .wea(atl_wenA_2), .addra(addrwA_2), .addrb(addrrA_2), .dina(dinwA_2), .douta(), .doutb(doutrA_2) );
-	BRAM_IF if2bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_2), .enb(atlrB_cen_2), .wea(atl_wenB_2), .addra(addrwB_2), .addrb(addrrB_2), .dina(dinwB_2), .douta(), .doutb(doutrB_2) );
-	BRAM_IF if3bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_3), .enb(atlrA_cen_3), .wea(atl_wenA_3), .addra(addrwA_3), .addrb(addrrA_3), .dina(dinwA_3), .douta(), .doutb(doutrA_3) );
-	BRAM_IF if3bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_3), .enb(atlrB_cen_3), .wea(atl_wenB_3), .addra(addrwB_3), .addrb(addrrB_3), .dina(dinwB_3), .douta(), .doutb(doutrB_3) );
-	BRAM_IF if4bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_4), .enb(atlrA_cen_4), .wea(atl_wenA_4), .addra(addrwA_4), .addrb(addrrA_4), .dina(dinwA_4), .douta(), .doutb(doutrA_4) );
-	BRAM_IF if4bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_4), .enb(atlrB_cen_4), .wea(atl_wenB_4), .addra(addrwB_4), .addrb(addrrB_4), .dina(dinwB_4), .douta(), .doutb(doutrB_4) );
-	BRAM_IF if5bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_5), .enb(atlrA_cen_5), .wea(atl_wenA_5), .addra(addrwA_5), .addrb(addrrA_5), .dina(dinwA_5), .douta(), .doutb(doutrA_5) );
-	BRAM_IF if5bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_5), .enb(atlrB_cen_5), .wea(atl_wenB_5), .addra(addrwB_5), .addrb(addrrB_5), .dina(dinwB_5), .douta(), .doutb(doutrB_5) );
-	BRAM_IF if6bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_6), .enb(atlrA_cen_6), .wea(atl_wenA_6), .addra(addrwA_6), .addrb(addrrA_6), .dina(dinwA_6), .douta(), .doutb(doutrA_6) );
-	BRAM_IF if6bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_6), .enb(atlrB_cen_6), .wea(atl_wenB_6), .addra(addrwB_6), .addrb(addrrB_6), .dina(dinwB_6), .douta(), .doutb(doutrB_6) );
-	BRAM_IF if7bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_7), .enb(atlrA_cen_7), .wea(atl_wenA_7), .addra(addrwA_7), .addrb(addrrA_7), .dina(dinwA_7), .douta(), .doutb(doutrA_7) );
-	BRAM_IF if7bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_7), .enb(atlrB_cen_7), .wea(atl_wenB_7), .addra(addrwB_7), .addrb(addrrB_7), .dina(dinwB_7), .douta(), .doutb(doutrB_7) );
+	BRAM_IF if0bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_0), .enb(atlrA_cen_0), .wea(atl_wenA_0), .addra(addrwA_0), .addrb(addrrA_0), .dina(dinwA_0), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrA_0) );
+	BRAM_IF if0bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_0), .enb(atlrB_cen_0), .wea(atl_wenB_0), .addra(addrwB_0), .addrb(addrrB_0), .dina(dinwB_0), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrB_0) );
+	BRAM_IF if1bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_1), .enb(atlrA_cen_1), .wea(atl_wenA_1), .addra(addrwA_1), .addrb(addrrA_1), .dina(dinwA_1), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrA_1) );
+	BRAM_IF if1bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_1), .enb(atlrB_cen_1), .wea(atl_wenB_1), .addra(addrwB_1), .addrb(addrrB_1), .dina(dinwB_1), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrB_1) );
+	BRAM_IF if2bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_2), .enb(atlrA_cen_2), .wea(atl_wenA_2), .addra(addrwA_2), .addrb(addrrA_2), .dina(dinwA_2), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrA_2) );
+	BRAM_IF if2bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_2), .enb(atlrB_cen_2), .wea(atl_wenB_2), .addra(addrwB_2), .addrb(addrrB_2), .dina(dinwB_2), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrB_2) );
+	BRAM_IF if3bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_3), .enb(atlrA_cen_3), .wea(atl_wenA_3), .addra(addrwA_3), .addrb(addrrA_3), .dina(dinwA_3), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrA_3) );
+	BRAM_IF if3bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_3), .enb(atlrB_cen_3), .wea(atl_wenB_3), .addra(addrwB_3), .addrb(addrrB_3), .dina(dinwB_3), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrB_3) );
+	BRAM_IF if4bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_4), .enb(atlrA_cen_4), .wea(atl_wenA_4), .addra(addrwA_4), .addrb(addrrA_4), .dina(dinwA_4), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrA_4) );
+	BRAM_IF if4bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_4), .enb(atlrB_cen_4), .wea(atl_wenB_4), .addra(addrwB_4), .addrb(addrrB_4), .dina(dinwB_4), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrB_4) );
+	BRAM_IF if5bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_5), .enb(atlrA_cen_5), .wea(atl_wenA_5), .addra(addrwA_5), .addrb(addrrA_5), .dina(dinwA_5), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrA_5) );
+	BRAM_IF if5bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_5), .enb(atlrB_cen_5), .wea(atl_wenB_5), .addra(addrwB_5), .addrb(addrrB_5), .dina(dinwB_5), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrB_5) );
+	BRAM_IF if6bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_6), .enb(atlrA_cen_6), .wea(atl_wenA_6), .addra(addrwA_6), .addrb(addrrA_6), .dina(dinwA_6), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrA_6) );
+	BRAM_IF if6bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_6), .enb(atlrB_cen_6), .wea(atl_wenB_6), .addra(addrwB_6), .addrb(addrrB_6), .dina(dinwB_6), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrB_6) );
+	BRAM_IF if7bA( .clka(clk), .clkb(clk), .ena(atlwA_cen_7), .enb(atlrA_cen_7), .wea(atl_wenA_7), .addra(addrwA_7), .addrb(addrrA_7), .dina(dinwA_7), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrA_7) );
+	BRAM_IF if7bB( .clka(clk), .clkb(clk), .ena(atlwB_cen_7), .enb(atlrB_cen_7), .wea(atl_wenB_7), .addra(addrwB_7), .addrb(addrrB_7), .dina(dinwB_7), .douta(), .web(1'b0), .dinb(64'd0), .doutb(doutrB_7) );
 `else
 	IF_SRAM  if0bA(.QA(), .QB(doutrA_0), .CLKA(clk), .CENA(atlwA_cen_0), .WENA(atl_wenA_0), .AA(addrwA_0), .DA(dinwA_0), .CLKB(clk), .CENB(atlrA_cen_0), .WENB(1'd1), .AB(addrrA_0), .DB('d0), .EMAA(3'd0), .EMAB(3'd0));
 	IF_SRAM  if0bB(.QA(), .QB(doutrB_0), .CLKA(clk), .CENA(atlwB_cen_0), .WENA(atl_wenB_0), .AA(addrwB_0), .DA(dinwB_0), .CLKB(clk), .CENB(atlrB_cen_0), .WENB(1'd1), .AB(addrrB_0), .DB('d0), .EMAA(3'd0), .EMAB(3'd0));

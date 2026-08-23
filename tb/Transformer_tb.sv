@@ -73,27 +73,34 @@
     `endif
 `endif
 
+//  Patterns live in the repo's pat/ directory. The path is absolute because
+//  xsim runs from <project>.sim/sim_1/behav/xsim, several levels away from
+//  the repo root. Change PAT_DIR (one place) if the repo moves.
+`define PAT_DIR "D:/Transformer_code/Transformer_IP_Integrate/pat/"
+
 `ifdef VIVA
     `ifdef FFN1
         //----input pattern ----
-        `define IF_PAT 	"C:/Users/LCP/Desktop/Edu/input_token.dat"	
-        `define KER_PAT	"C:/Users/LCP/Desktop/Edu/FFN_W1.dat"
-        `define BIAS_PAT	"C:/Users/LCP/Desktop/Edu/bias1.dat"
+        `define IF_PAT 	{`PAT_DIR, "input_token.dat"}
+        `define KER_PAT	{`PAT_DIR, "FFN_W1.dat"}
+        `define BIAS_PAT	{`PAT_DIR, "bias1.dat"}
         //----gold pattern ----
-        `define OF_GOLD	    "C:/Users/LCP/Desktop/Edu/FFN1_out_original.dat"
+        //  FFN1 runs i-GELU (cfg_z3[0] = 1), so the gold is the i-GELU
+        //  reference, not the plain-requant FFN1_out_original.dat.
+        `define OF_GOLD	    {`PAT_DIR, "FFN1_igelu_out.dat"}
     `elsif FFN2
         //----input pattern ----
-        `define IF_PAT 	"C:/Users/LCP/Desktop/Edu/FFN1_out_original.dat"	
-        `define KER_PAT	"C:/Users/LCP/Desktop/Edu/FFN_W2.dat"
-        `define BIAS_PAT	"C:/Users/LCP/Desktop/Edu/bias2.dat"
+        `define IF_PAT 	{`PAT_DIR, "FFN1_out_original.dat"}
+        `define KER_PAT	{`PAT_DIR, "FFN_W2.dat"}
+        `define BIAS_PAT	{`PAT_DIR, "bias2.dat"}
         //----gold pattern ----
-        `define OF_GOLD	    "C:/Users/LCP/Desktop/Edu/FFN2_out.dat"
+        `define OF_GOLD	    {`PAT_DIR, "FFN2_out.dat"}
     `else
-        `define IF_PAT 	"C:/Users/LCP/Desktop/Edu/pat/input_token.dat"	
-        `define KER_PAT	"C:/Users/LCP/Desktop/Edu/pat/Wq_origin.dat"
-        `define BIAS_PAT	"C:/Users/LCP/Desktop/Edu/pat/fake_bias.dat"
+        `define IF_PAT 	{`PAT_DIR, "input_token.dat"}
+        `define KER_PAT	{`PAT_DIR, "FFN_W1.dat"}
+        `define BIAS_PAT	{`PAT_DIR, "bias1.dat"}
         //----gold pattern ----
-        `define OF_GOLD	    "C:/Users/LCP/Desktop/Edu/pat/Q.dat"
+        `define OF_GOLD	    {`PAT_DIR, "FFN1_igelu_out.dat"}
     `endif
 `endif
 
@@ -165,7 +172,7 @@ parameter TBYTE = 8		;
     localparam cfg_ker_length_sub1          =   9'd63  ;
     localparam cfg_ker_readnums             =   3'd7   ;
     localparam cfg_ker_tile_readnums_sub1   =   2'd3   ;
-    localparam cfg_ker_tile_size_sub1       =   6'd63  ;
+    localparam cfg_ker_tile_size_sub1       =   6'd31  ;  // 16-way: 512ch/16 = 32 subtiles per tile (was 64)
 `elsif FFN2
     localparam cfg_if_token_nums_sub1       =   3'd1    ;
     localparam cfg_if_totalsize_sub1        =   9'd511  ;
@@ -173,7 +180,7 @@ parameter TBYTE = 8		;
     localparam cfg_ker_length_sub1          =   9'd255  ;
     localparam cfg_ker_readnums             =   3'd1    ;
     localparam cfg_ker_tile_readnums_sub1   =   2'd0    ;
-    localparam cfg_ker_tile_size_sub1       =   6'd63   ;
+    localparam cfg_ker_tile_size_sub1       =   6'd31   ;  // 16-way: 512ch/16 = 32 subtiles per tile (was 64)
 `else
     localparam cfg_if_token_nums_sub1       =   3'd7    ;
     localparam cfg_if_totalsize_sub1        =   9'd511  ;
@@ -181,36 +188,49 @@ parameter TBYTE = 8		;
     localparam cfg_ker_length_sub1          =   9'd63   ;
     localparam cfg_ker_readnums             =   3'd7    ;
     localparam cfg_ker_tile_readnums_sub1   =   2'd0    ;
-    localparam cfg_ker_tile_size_sub1       =   6'd63   ;
+    localparam cfg_ker_tile_size_sub1       =   6'd31   ;  // 16-way: 512ch/16 = 32 subtiles per tile (was 64)
 `endif
 // -----------------for output config----------------------
+//  Output reshape. The FFN is 16-column (PEBLKCOL_NUM = 16), so a column
+//  group now spans two 64-bit output words and the whole ct_gp/ct_col/ct_cha
+//  walk is reshaped vs the 8-way baseline. cfg_ot_sft_col is a NEW field that
+//  only exists in the 16-way FFN.
 `ifdef FFN1
     localparam cfg_ot_rnd_finsub1	= 9'd511	;
-    localparam cfg_ot_tgpfnsub1		= 9'd0		;
-    localparam cfg_ot_tcolfnsub1	= 9'd7      ;     
-    localparam cfg_ot_tchafnsub1	= 9'd63	    ;	 
-    localparam cfg_ot_sft_gp		= 9'd0	    ;
-    localparam cfg_ot_sft_colpra	= 9'd8		;
+    localparam cfg_ot_tgpfnsub1		= 9'd7		;   // 16-way: ct_gp = token 0..7
+    localparam cfg_ot_tcolfnsub1	= 9'd31     ;   // 16-way: ct_col = tile 0..31
+    localparam cfg_ot_tchafnsub1	= 9'd1	    ;   // 16-way: ct_cha = lo/hi word 0..1
+    localparam cfg_ot_sft_gp		= 9'd2	    ;   // 16-way: token stride
+    localparam cfg_ot_sft_colpra	= 9'd1		;   // 16-way: lo/hi-word stride
+    localparam cfg_ot_sft_col		= 9'd16		;   // 16-way: tile stride (NEW field)
 `elsif FFN2
     localparam cfg_ot_rnd_finsub1	= 9'd127	;
-    localparam cfg_ot_tgpfnsub1		= 9'd0		;
-    localparam cfg_ot_tcolfnsub1	= 9'd1      ;     
-    localparam cfg_ot_tchafnsub1	= 9'd63	    ;	 
-    localparam cfg_ot_sft_gp		= 9'd0	    ;
-    localparam cfg_ot_sft_colpra	= 9'd2		;
+    localparam cfg_ot_tgpfnsub1		= 9'd1		;   // 16-way: ct_gp = token 0..1
+    localparam cfg_ot_tcolfnsub1	= 9'd31     ;   // 16-way: ct_col = subtile 0..31
+    localparam cfg_ot_tchafnsub1	= 9'd1	    ;   // 16-way: ct_cha = lo/hi word 0..1
+    localparam cfg_ot_sft_gp		= 9'd2	    ;   // 16-way: token stride (= 2 rows)
+    localparam cfg_ot_sft_colpra	= 9'd1		;   // 16-way: lo/hi-word stride
+    localparam cfg_ot_sft_col		= 9'd4		;   // 16-way: subtile stride (2 tok x 2 rows)
 `else
     localparam cfg_ot_rnd_finsub1	= 9'd511	;
-    localparam cfg_ot_tgpfnsub1		= 9'd0		;
-    localparam cfg_ot_tcolfnsub1	= 9'd7      ;     
-    localparam cfg_ot_tchafnsub1	= 9'd63	    ;	 
-    localparam cfg_ot_sft_gp		= 9'd0	    ;
-    localparam cfg_ot_sft_colpra	= 9'd8		;
+    localparam cfg_ot_tgpfnsub1		= 9'd7		;
+    localparam cfg_ot_tcolfnsub1	= 9'd31     ;
+    localparam cfg_ot_tchafnsub1	= 9'd1	    ;
+    localparam cfg_ot_sft_gp		= 9'd2	    ;
+    localparam cfg_ot_sft_colpra	= 9'd1		;
+    localparam cfg_ot_sft_col		= 9'd16		;
 `endif
 // -----------------for quantization config----------------------
 localparam cfg_m0_scale         = MMOD_cfgin_quantize_m0_scale          ;
 localparam cfg_index            = MMOD_cfgin_quantize_index	            ;
 localparam cfg_z_of_weight      = MMOD_cfgin_quantize_z_of_weightht     ;
-localparam cfg_z3               = 8'd0  ;
+//  cfg_z3 bit0 doubles as cfg_gelu_en in the i-GELU FFN: the activation is
+//  enabled per layer, so FFN1 runs i-GELU and FFN2 runs plain M0 requant.
+`ifdef FFN1
+localparam cfg_z3               = 8'd1  ;   // FFN1 -> i-GELU ON
+`else
+localparam cfg_z3               = 8'd0  ;   // FFN2 / SA -> i-GELU OFF
+`endif
 // -----------------------------------------------------------------------
 
 localparam INST_HEAD = 64'hefef123abbeeff22 ;
@@ -225,7 +245,7 @@ localparam CFG_2 = { 52'd0 , cfg_if_token_nums_sub1 , cfg_if_totalsize_sub1 } ;
 localparam CFG_3 = { 55'd0 , cfg_bias_once_load_size_sub1 } ;
 localparam CFG_4 = { 47'd0 , cfg_ker_tile_readnums_sub1 , cfg_ker_tile_size_sub1 , cfg_ker_length_sub1 } ;
 localparam CFG_14	= {cfg_ot_rnd_finsub1 , cfg_ot_tgpfnsub1 , cfg_ot_tcolfnsub1 ,37'd0}	;
-localparam CFG_15	= {cfg_ot_tchafnsub1  , cfg_ot_sft_gp	 , cfg_ot_sft_colpra ,37'd0}	;
+localparam CFG_15	= {cfg_ot_tchafnsub1  , cfg_ot_sft_gp	 , cfg_ot_sft_colpra , cfg_ot_sft_col , 28'd0}	;
 
 localparam CFG_5  = 64'd0 ;
 localparam CFG_6  = 64'd0 ;
@@ -836,16 +856,16 @@ initial begin
         // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         //------------ now send kernel sram data -----
-        for ( i0=0 ; i0<TB_KER_ROW * 8 ; i0=i0+1 )begin	   // 8 is the ker_col
+        for ( i0=0 ; i0<TB_KER_ROW * 16 ; i0=i0+1 )begin	   // 16 = ker_col (PEBLKCOL_NUM, Phase 1b)
             @(posedge clk );#( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID	=	1	;
             S_AXIS_MM2S_TDATA = ker_array_temp[ ker_addr ] 	;
             ker_addr = ker_addr + 1 ;
-            if( i0 == TB_KER_ROW * 8 - 1 )begin
+            if( i0 == TB_KER_ROW * 16 - 1 )begin
                 S_AXIS_MM2S_TLAST = 1;
             end
             wait(S_AXIS_MM2S_TREADY);
-            if( i0 == TB_KER_ROW * 8 - 15 )begin
+            if( i0 == TB_KER_ROW * 16 - 15 )begin
                 @( posedge clk );#( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 0 ;
                 S_AXIS_MM2S_TDATA	= 'd0 ;
@@ -982,12 +1002,12 @@ initial begin
         // wait(S_AXIS_MM2S_TREADY);
         // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
-        for ( i0=0; i0<TB_KER_ROW * ( 512 - 8 ); i0=i0+1)begin  
+        for ( i0=0; i0<TB_KER_ROW * ( 512 - 16 ); i0=i0+1)begin  
             @(posedge clk );#( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID	=	1	;
             S_AXIS_MM2S_TDATA = ker_array_temp[ ker_addr ]	;
             ker_addr = ker_addr + 1 ;
-            if( i0 == TB_KER_ROW * ( 512 - 8 ) - 1 )begin
+            if( i0 == TB_KER_ROW * ( 512 - 16 ) - 1 )begin
                 S_AXIS_MM2S_TLAST = 1; 
             end
             wait(S_AXIS_MM2S_TREADY);
@@ -1260,12 +1280,12 @@ initial begin
             // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             //------------ now send kernel sram data -----
-            for ( i0=0 ; i0<TB_KER_ROW * 8 ; i0=i0+1 )begin	   // 8 is the ker_col
+            for ( i0=0 ; i0<TB_KER_ROW * 16 ; i0=i0+1 )begin	   // 16 = ker_col (PEBLKCOL_NUM, Phase 1b)
                 @(posedge clk );#( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID	=	1	;
                 S_AXIS_MM2S_TDATA = ker_array_temp[ ker_addr ] 	;
                 ker_addr = ker_addr + 1 ;
-                if( i0 == TB_KER_ROW * 8 - 1 )begin
+                if( i0 == TB_KER_ROW * 16 - 1 )begin
                     S_AXIS_MM2S_TLAST = 1;
                 end
                 wait(S_AXIS_MM2S_TREADY);
@@ -1318,12 +1338,12 @@ initial begin
             // wait(S_AXIS_MM2S_TREADY);
             // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
-            for ( i0=0 ; i0<TB_KER_ROW * (512-8) ; i0=i0+1 )begin
+            for ( i0=0 ; i0<TB_KER_ROW * (512-16) ; i0=i0+1 )begin
                 @(posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID	=	1	;
                 S_AXIS_MM2S_TDATA = ker_array_temp[ ker_addr ]	;
                 ker_addr = ker_addr + 1 ;
-                if( i0 == TB_KER_ROW * (512-8) - 1 )begin
+                if( i0 == TB_KER_ROW * (512-16) - 1 )begin
                     S_AXIS_MM2S_TLAST = 1; 
                 end
                 wait(S_AXIS_MM2S_TREADY);
@@ -1512,12 +1532,12 @@ initial begin
         //---- DATA HEAD end---------------------
 
         //------------ now send kernel sram data -----
-        for ( i0=0 ; i0<TB_KER_ROW * 8 ; i0=i0+1 )begin	   // 8 is the ker_col
+        for ( i0=0 ; i0<TB_KER_ROW * 16 ; i0=i0+1 )begin	   // 16 = ker_col (PEBLKCOL_NUM, Phase 1b)
             @(posedge clk );#( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID	=	1	;
             S_AXIS_MM2S_TDATA = ker_array_temp[ ker_addr ] 	;
             ker_addr = ker_addr + 1 ;
-            if( i0 == TB_KER_ROW * 8 - 1 )begin
+            if( i0 == TB_KER_ROW * 16 - 1 )begin
                 S_AXIS_MM2S_TLAST = 1;
             end
             wait(S_AXIS_MM2S_TREADY);
@@ -1549,12 +1569,12 @@ initial begin
         @( posedge clk ); #( `CYCLE/2.5 ); 	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
         //---- DATA HEAD end---------------------
 
-        for ( i0=0 ; i0<TB_KER_ROW * (512-8) ; i0=i0+1 )begin
+        for ( i0=0 ; i0<TB_KER_ROW * (512-16) ; i0=i0+1 )begin
             @(posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID	=	1	;
             S_AXIS_MM2S_TDATA = ker_array_temp[ ker_addr ]	;
             ker_addr = ker_addr + 1 ;
-            if( i0 == TB_KER_ROW * (512-8) - 1 )begin
+            if( i0 == TB_KER_ROW * (512-16) - 1 )begin
                 S_AXIS_MM2S_TLAST = 1; 
             end
             wait(S_AXIS_MM2S_TREADY);
@@ -1740,12 +1760,32 @@ end
 // =============================================================================
 
 // =============================================================================
+// ===============		watchdog		========================================
+// =============================================================================
+//  The stimulus is back-pressured by the DUT, so a stall inside the design
+//  hangs the whole simulation with no verdict. Force one instead.
+//  FFN1 is ~1.37M ns; FFN2 reloads the kernel x4 so it needs a bigger budget.
+    initial begin
+        #( `CYCLE * 800000 ) ;
+        if( !dutot_done ) begin
+            $display("====================================================================");
+            $display(">>> WATCHDOG: stream/DUT stalled; produced ot_addr=%0d output words.", ot_addr);
+            $display(">>> WATCHDOG: streamed so far -> ker_addr=%0d (full=%0d), bias_addr=%0d, ifmap_addr=%0d",
+                     ker_addr, TB_RUN_KERSRAM_LENGTH, bias_addr, ifmap_addr);
+            $display(">>> WATCHDOG: FSM state=%0d mode=%0d | SA_busy=%b NORM_busy=%b FFN_busy=%b",
+                     tp001.curr_state, tp001.mode, tp001.SA_busy, tp001.NORM_busy, tp001.FFN_busy);
+            $display("====================================================================");
+            dutot_done = 1 ;            // let the compare block run with what was produced
+        end
+    end
+
+// =============================================================================
 // ===============		compare data block		================================
 // =============================================================================
     initial begin
         #1;
         wait( reset ) ;
-        #( `CYCLE*5 ) ;   
+        #( `CYCLE*5 ) ;
         wait( dutot_done ) ;	// wait DUT output data all done
         err_ofmap = 0;
         icp = 0;
@@ -1755,9 +1795,19 @@ end
                 if(ofm_array[icp] !== 64'bx)
                     $display("** error   : number => %d , error pattern => %16x , gold pattern => %16x        **",icp,ofm_array[icp],ofm_gold_temp[icp]  );
             end
-            else
-                $display("** correct : number => %d , correct pattern => %16x , gold pattern => %16x        **",icp,ofm_array[icp],ofm_gold_temp[icp]  );
+            // per-word "correct" lines suppressed: OT_NUM_FORCMP is 2048 for
+            // FFN1 and they bury the verdict. Errors above are still printed.
         end
+
+        //----    verdict    -----
+        $display("====================================================================");
+        $display(">>> compared %0d words against gold, %0d mismatches", OT_NUM_FORCMP, err_ofmap);
+        if( err_ofmap == 0 )
+            $display(">>> RESULT: PASS  (%0d/%0d bit-exact)", OT_NUM_FORCMP, OT_NUM_FORCMP);
+        else
+            $display(">>> RESULT: FAIL  (%0d/%0d mismatched)", err_ofmap, OT_NUM_FORCMP);
+        $display(">>> CYCLES: %0d", cycle);
+        $display("====================================================================");
 
         // //----display the compare result on terminal ----
         // $display("********************************************************************");

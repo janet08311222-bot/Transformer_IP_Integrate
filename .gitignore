@@ -5,3 +5,4 @@ xsim.dir/
 *.wdb
 sim/work/
 webtalk*
+vivado/build/

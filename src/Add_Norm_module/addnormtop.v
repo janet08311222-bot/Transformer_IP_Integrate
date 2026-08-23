@@ -156,11 +156,22 @@ div div1(
 
 ); 
 
+  // DW_sqrt is a Vivado CORDIC core. Its AXI-Stream tdata ports are byte
+  // aligned, so a 33-bit input / 17-bit output core presents 40-bit and
+  // 24-bit buses; the handshake pins also have to be driven. Zero-extend in,
+  // slice out, and hold tvalid high (the core is in NonBlocking mode, so it
+  // just streams).
+  wire [23:0] sqrt_dout_padded ;
+
   DW_sqrt  u_sqrt(
       .aclk(clk)
-     , .s_axis_cartesian_tdata(variance)
-    , .m_axis_dout_tdata(sqrt_variance)
+     , .s_axis_cartesian_tvalid( 1'b1 )
+     , .s_axis_cartesian_tdata( { 7'd0, variance } )
+     , .m_axis_dout_tvalid( )
+     , .m_axis_dout_tdata( sqrt_dout_padded )
   );
+
+  assign sqrt_variance = sqrt_dout_padded[ TBITS+fixed : 0 ] ;
 
 
 always@(posedge clk)begin
