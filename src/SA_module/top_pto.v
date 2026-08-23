@@ -127,7 +127,16 @@ wire if_write_en			;
 wire if_read_last			;
 wire if_row_finish		;
 wire if_dy2_conv_finish	;
-assign rdwd_done = if_dy2_conv_finish ;
+//  rdwd_done is this module's "SA layer finished" output, and Transformer_FSM
+//  uses it to leave the SA state. It MUST be the layer-level done from
+//  schedule_ctrl (read_last = write_row_number >= cfg_total_row), not
+//  if_dy2_conv_finish, which pulses at the end of EVERY 2-row pass - that made
+//  the FSM leave SA after the first 128 output words of 4096.
+//  if_top keeps getting if_dy2_conv_finish directly; it was already reading
+//  exactly this value back through the rdwd_done net, so nothing inside the
+//  SA block changes.
+wire sche_rdwd_done ;
+assign rdwd_done = sche_rdwd_done ;
 wire [2:0] if_read_current_state;
 wire [TBITS-1:0] ifr_data_0 , ifr_data_1 , ifr_data_2 , ifr_data_3 , ifr_data_4 , ifr_data_5 , ifr_data_6 , ifr_data_7	;
 wire	ifr_valid_0 , ifr_valid_1 , ifr_valid_2 , ifr_valid_3 , ifr_valid_4 , ifr_valid_5 , ifr_valid_6 , ifr_valid_7	;
@@ -306,6 +315,7 @@ wire	[ 7:0]  cfg_z3			;
 	schedule_ctrl sche00(
 		.clk 	(	clk	)
 	,	.reset 	(	ap_rst	)
+	,	.rdwd_done				(	sche_rdwd_done	)
 	,	.mast_curr_state 		(	fsm_mast_state	)	
 	,	.cfg_conv_switch		(	cfg_conv_switch			)		
 	,	.if_write_start			(	if_write_start		)
@@ -379,7 +389,7 @@ wire	[ 7:0]  cfg_z3			;
 		,	.dy2_conv_finish			(	if_dy2_conv_finish		)
 		,	.if_read_current_state	(	if_read_current_state	)  
 		,	.if_read_last		(if_read_last)
-		,	.rdwd_done			(rdwd_done	)  
+		,	.rdwd_done			(if_dy2_conv_finish)  
 		//----    for PE data    -----
 		,	.dout_ifsr_0	(	ifr_data_0 	)	, .ifr_valid_0  ( ifr_valid_0 ), .ifr_final_0  ( ifr_final_0 )	
 		,	.dout_ifsr_1	(	ifr_data_1	)	, .ifr_valid_1  ( ifr_valid_1 ), .ifr_final_1  ( ifr_final_1 )
