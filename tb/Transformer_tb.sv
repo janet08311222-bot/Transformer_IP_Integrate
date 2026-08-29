@@ -19,11 +19,16 @@
 `define End_CYCLE 50000              // Modify cycle times once your design need more cycle times!
 `define NI_DELAY  2		                // NONIDEAL delay latency
 `define AFPOS_DELAY  0.5		        // after posedge NONIDEAL delay latency
-`define FFN1
+// `define FFN1
+`define FFN2
 //  連續跑幾趟。>1 會在「不 reset DUT」的情況下重複送 head 指令 + 資料,
 //  用來驗證 FSM 每趟都能正確收尾、下一趟不受前一趟殘留影響。
 //  每趟結果都必須各自與 gold 相符 —— 也就等於趟與趟之間完全一致。
+`ifdef FFN1
 `define N_PASS 2
+`else
+`define N_PASS 1        // 多趟迴圈只實作在 FFN1 分支
+`endif
 // `define SOFTMAX                  // run the softmax path instead of FFN1/FFN2
 
 //-- timescale --
@@ -295,7 +300,10 @@ reg [32-1:0] ot_addr ;
 reg [32-1:0] ot_token_sub1 ;
 reg [32-1:0] err_ofmap;
 reg [32-1:0] x_cnt;		// output words the DUT never drove (guards a false PASS)
-integer pass_id;			// which pass of `N_PASS is being driven
+integer pass_id = 0;		// which pass of `N_PASS is being driven.
+							// MUST default to 0: only the FFN1 branch drives it, but the
+							// capture below indexes with it in every mode, and an
+							// uninitialised integer is X -> nothing gets stored.
 integer jcp;				// per-pass mismatch counter
 //  ot_addr is a REMAPPED gold index (it wraps within one pass, it is not a
 //  running counter), and it only clears on reset. Across passes it would carry

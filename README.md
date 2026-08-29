@@ -22,6 +22,12 @@ Behavioural simulation 用**真的 IP**（不是 `sim/stubs_*.v`）：
 | `` `define FFN1 `` + `` `N_PASS 2 `` | PASS，兩趟各 2048/2048 bit-exact，272,538 cycles |
 | `fsm_check_tb` (`tb/new_tb_512MAC.sv`) | PASS，4096/4096 bit-exact，0 個未驅動，173,886 cycles |
 
+**Add&Norm 從未被功能驗證** —— 它的測資（`NORM_output_fpga.dat` 等）是板子從 SD 卡讀的,
+`Ccode/ibert/v3_data.c` 裡只有檔名沒有資料,這些檔案不在 repo 也不在開發機上。目前只確認:
+synthesis 乾淨、reset 極性正確（`addnormtop` 內部是 `if (!reset)` 的 active-low,接 `resetn` 是對的）。
+**`NORM_done = out_last` 的時機沒被驗證過** —— 這跟 SA 那個 `rdwd_done` 是完全相同的類別
+（算得對但完成訊號時機錯,導致 FSM 卡死）,拿到測資前這個風險是留著的。
+
 **多趟測試**：`tb/Transformer_tb.sv` 的 `` `N_PASS `` 設成 >1 時,會在**不重置 DUT** 的情況下連續送多趟
 head 指令與資料,驗證 FSM 每趟都能正確收尾、下一趟不受前一趟殘留影響。這條路徑原本
 完全沒被覆蓋（每個模式都只從 reset 跑一趟）,而 SA 那個 bug 正是「算得對但收不了尾」。
