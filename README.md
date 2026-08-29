@@ -1,3 +1,5 @@
+| FFN (`FFN_top`) | 我們的 i-GELU + 16-column 版 | 已換入，**兩層都 PASS**（FFN1 2048/2048、FFN2 512/512） |
+| `` `define FFN2 `` | PASS，512/512 bit-exact，0 個未驅動，536,008 cycles |
 
 | `` `define FFN1 `` + `` `define N_PASS 2 `` | PASS，兩趟各 2048/2048 bit-exact，272,538 cycles # Transformer_IP_Integrate
 
@@ -5,8 +7,8 @@
 
 | Block | 來源 | 狀態 |
 |---|---|---|
+| FFN (`FFN_top`) | 我們的 i-GELU + 16-column 版 | 已換入，**兩層都 PASS**（FFN1 2048/2048、FFN2 512/512） |
 | Self-Attention (`dla512_top`) | 我們的 2-row parallel 版 | 已換入，**模擬 PASS 4096/4096 bit-exact** |
-| FFN (`FFN_top`) | 我們的 i-GELU + 16-column 版 | 已換入，**FFN1 模擬 PASS 2048/2048 bit-exact** |
 | Softmax (`softmax_top`) | 我們的 LUT 版 | 已換入，**模擬 PASS 3328/3328 bit-exact** |
 | Add&Norm (`addnormtop`) | 學長的 | 沿用，synthesis 乾淨 |
 
@@ -17,6 +19,7 @@ Behavioural simulation 用**真的 IP**（不是 `sim/stubs_*.v`）：
 
 | 模式 | 結果 |
 |---|---|
+| `` `define FFN2 `` | PASS，512/512 bit-exact，0 個未驅動，536,008 cycles（kernel 重載 4 次） |
 | `` `define FFN1 `` | PASS，2048/2048 bit-exact，0 個未驅動，136,279 cycles |
 | `` `define SOFTMAX `` | PASS，52 組 × 64 = 3328/3328 bit-exact，11,260 cycles |
 | `` `define FFN1 `` + `` `N_PASS 2 `` | PASS，兩趟各 2048/2048 bit-exact，272,538 cycles |
