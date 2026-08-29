@@ -20,6 +20,10 @@
 `define NI_DELAY  2		                // NONIDEAL delay latency
 `define AFPOS_DELAY  0.5		        // after posedge NONIDEAL delay latency
 `define FFN1
+//  連續跑幾趟。>1 會在「不 reset DUT」的情況下重複送 head 指令 + 資料,
+//  用來驗證 FSM 每趟都能正確收尾、下一趟不受前一趟殘留影響。
+//  每趟結果都必須各自與 gold 相符 —— 也就等於趟與趟之間完全一致。
+`define N_PASS 2
 // `define SOFTMAX                  // run the softmax path instead of FFN1/FFN2
 
 //-- timescale --
@@ -291,6 +295,14 @@ reg [32-1:0] ot_addr ;
 reg [32-1:0] ot_token_sub1 ;
 reg [32-1:0] err_ofmap;
 reg [32-1:0] x_cnt;		// output words the DUT never drove (guards a false PASS)
+integer pass_id;			// which pass of `N_PASS is being driven
+integer jcp;				// per-pass mismatch counter
+//  ot_addr is a REMAPPED gold index (it wraps within one pass, it is not a
+//  running counter), and it only clears on reset. Across passes it would carry
+//  the previous pass's position and scribble over it, so the stimulus pulses
+//  pass_rst before each pass and the capture is offset by the pass number.
+reg pass_rst = 1'b0;
+localparam TB_GOLD_WORDS = TB_RUN_OTCOL ;	// output words ONE pass produces
 reg [64-1:0] ofm_array [0 : OT_NUM_FORCMP] ;
 reg [64-1:0] ofm_gold [ 0: OT_NUM_FORCMP ];
 reg [64-1:0] ofm_gold_temp [ 0: OT_NUM_FORCMP ];
@@ -575,6 +587,16 @@ initial begin
         #( `CYCLE*15 + `NI_DELAY ) ;
         reset = 0;
         #( `CYCLE*5 ) ;
+
+        //  DUT is NOT reset between passes - that is the point of the test.
+        for ( pass_id = 0 ; pass_id < `N_PASS ; pass_id = pass_id + 1 ) begin
+        $display(">>> ---- PASS %0d start (cycle %0d) ----", pass_id, cycle);
+        ifmap_addr = 0 ;
+        bias_addr  = 0 ;
+        ker_addr   = 0 ;
+        //  clear the tb-side output remap so this pass writes its own slice
+        @( posedge clk ); pass_rst = 1'b1 ;
+        @( posedge clk ); pass_rst = 1'b0 ;
 
         //---- FFN HEAD ----
         @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
@@ -1036,8 +1058,11 @@ initial begin
             S_AXIS_MM2S_TVALID = 0 ;
             S_AXIS_MM2S_TLAST = 0 ;
 		
-        #( `CYCLE*2000) ;
-        dutot_done = 1 ;	// output done now for compare 
+        #( `CYCLE*2000) ;          // let this pass drain before starting the next
+        $display(">>> ---- PASS %0d done  (cycle %0d, tb_o_cnt = %0d) ----", pass_id, cycle, tb_o_cnt);
+        end
+
+        dutot_done = 1 ;	// all passes done, compare now
     
     //---------- FFN2 testbench control ----
     `elsif FFN2
@@ -1673,7 +1698,7 @@ end
 
 `ifdef FFN1
     always @(posedge clk) begin
-        if(reset) begin
+        if(reset || pass_rst) begin
             ot_token_sub1 <= 0 ;
             ot_addr <= 0 ;
         end
@@ -1698,7 +1723,7 @@ end
     end
 `else
     always @(posedge clk) begin
-        if(reset) begin
+        if(reset || pass_rst) begin
             ot_addr <= 0 ;
         end
         else if(M_AXIS_S2MM_TREADY && M_AXIS_S2MM_TVALID && FFN_start) begin
@@ -1708,7 +1733,7 @@ end
 `endif
 always @(posedge clk) begin
     if( M_AXIS_S2MM_TREADY && M_AXIS_S2MM_TVALID && FFN_start )
-        ofm_array [ot_addr]<= M_AXIS_S2MM_TDATA ;
+        ofm_array [ pass_id*TB_GOLD_WORDS + ot_addr ] <= M_AXIS_S2MM_TDATA ;
 end
 // integer ans1 = 0;
 // integer ans2 = 0;
@@ -1819,28 +1844,53 @@ end
         //  FFN1, but the gold file holds 2048 words, so indices past 2047 are X
         //  in BOTH arrays - and `!==` treats X vs X as equal, which silently
         //  turns 14336 uncompared slots into "matches" and inflates the verdict.
+        //
+        //  With `N_PASS > 1 the output words of every pass are appended, so the
+        //  gold index wraps: pass p word n lands at ofm_array[p*TB_GOLD_WORDS+n]
+        //  and must match ofm_gold_temp[n]. Every pass matching gold is the same
+        //  statement as every pass matching every other pass.
         for (icp = 0; icp<tb_o_cnt ; icp= icp+1 ) begin
             if( ofm_array[icp] === 64'bx ) x_cnt = x_cnt + 1 ;
-            if( ofm_array[icp] !== ofm_gold_temp[icp] ) begin
+            if( ofm_array[icp] !== ofm_gold_temp[icp % TB_GOLD_WORDS] ) begin
                 err_ofmap = err_ofmap +1 ;
                 if(ofm_array[icp] !== 64'bx)
-                    $display("** error   : number => %d , error pattern => %16x , gold pattern => %16x        **",icp,ofm_array[icp],ofm_gold_temp[icp]  );
+                    $display("** error   : pass %0d word %0d (idx %0d) => %16x , gold => %16x        **",
+                             icp/TB_GOLD_WORDS, icp%TB_GOLD_WORDS, icp,
+                             ofm_array[icp], ofm_gold_temp[icp % TB_GOLD_WORDS] );
             end
             // per-word "correct" lines suppressed: 2048 of them bury the verdict.
         end
 
+        //----    per-pass breakdown    -----
+        if( `N_PASS > 1 ) begin
+            $display("====================================================================");
+            for( pass_id = 0 ; pass_id < `N_PASS ; pass_id = pass_id + 1 ) begin
+                jcp = 0 ;
+                for( icp = pass_id*TB_GOLD_WORDS ;
+                     icp < (pass_id+1)*TB_GOLD_WORDS && icp < tb_o_cnt ;
+                     icp = icp + 1 )
+                    if( ofm_array[icp] !== ofm_gold_temp[icp % TB_GOLD_WORDS] ) jcp = jcp + 1 ;
+                $display(">>> PASS %0d : %0d / %0d words matched gold", pass_id,
+                         TB_GOLD_WORDS - jcp, TB_GOLD_WORDS );
+            end
+        end
+
         //----    verdict    -----
         $display("====================================================================");
-        $display(">>> DUT produced %0d output words; compared all of them against gold", tb_o_cnt);
+        $display(">>> DUT produced %0d output words over %0d pass(es); expected %0d",
+                 tb_o_cnt, `N_PASS, `N_PASS * TB_GOLD_WORDS );
         $display(">>> undriven (all-X) output words : %0d", x_cnt);
-        if( err_ofmap == 0 && tb_o_cnt > 0 && x_cnt == 0 )
-            $display(">>> RESULT: PASS  (%0d/%0d bit-exact)", tb_o_cnt, tb_o_cnt);
-        else if( tb_o_cnt == 0 )
+        if( tb_o_cnt == 0 )
             $display(">>> RESULT: FAIL  (DUT produced no output at all)");
+        else if( tb_o_cnt != `N_PASS * TB_GOLD_WORDS )
+            $display(">>> RESULT: FAIL  (produced %0d words, expected %0d - a pass did not complete)",
+                     tb_o_cnt, `N_PASS * TB_GOLD_WORDS );
         else if( x_cnt != 0 )
             $display(">>> RESULT: FAIL  (%0d mismatches, and %0d words were never driven)", err_ofmap, x_cnt);
-        else
+        else if( err_ofmap != 0 )
             $display(">>> RESULT: FAIL  (%0d/%0d mismatched)", err_ofmap, tb_o_cnt);
+        else
+            $display(">>> RESULT: PASS  (%0d/%0d bit-exact)", tb_o_cnt, tb_o_cnt);
         $display(">>> CYCLES: %0d", cycle);
         $display("====================================================================");
 
