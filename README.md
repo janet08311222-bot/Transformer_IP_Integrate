@@ -1,4 +1,5 @@
-# Transformer_IP_Integrate
+
+| `` `define FFN1 `` + `` `define N_PASS 2 `` | PASS，兩趟各 2048/2048 bit-exact，272,538 cycles # Transformer_IP_Integrate
 
 學長的 transformer（`FPGAcode_Integrate`）為底，把其中的 block 換成我們自己做的版本。
 
@@ -18,7 +19,13 @@ Behavioural simulation 用**真的 IP**（不是 `sim/stubs_*.v`）：
 |---|---|
 | `` `define FFN1 `` | PASS，2048/2048 bit-exact，0 個未驅動，136,279 cycles |
 | `` `define SOFTMAX `` | PASS，52 組 × 64 = 3328/3328 bit-exact，11,260 cycles |
+| `` `define FFN1 `` + `` `N_PASS 2 `` | PASS，兩趟各 2048/2048 bit-exact，272,538 cycles |
 | `fsm_check_tb` (`tb/new_tb_512MAC.sv`) | PASS，4096/4096 bit-exact，0 個未驅動，173,886 cycles |
+
+**多趟測試**：`tb/Transformer_tb.sv` 的 `` `N_PASS `` 設成 >1 時,會在**不重置 DUT** 的情況下連續送多趟
+head 指令與資料,驗證 FSM 每趟都能正確收尾、下一趟不受前一趟殘留影響。這條路徑原本
+完全沒被覆蓋（每個模式都只從 reset 跑一趟）,而 SA 那個 bug 正是「算得對但收不了尾」。
+兩趟的 cycle 數只差 24（重新接 head 指令的開銷）。
 
 softmax 那個 PASS 順帶驗證了 `src/common_module/DW_mult_pipe_fpga.v`：gold 是作者用真的
 DesignWare `DW_mult_pipe` 產生的，3328 筆全對代表這個 FPGA 替代品的 latency 與
