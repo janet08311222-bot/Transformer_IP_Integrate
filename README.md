@@ -1,7 +1,4 @@
-| FFN (`FFN_top`) | 我們的 i-GELU + 16-column 版 | 已換入，**兩層都 PASS**（FFN1 2048/2048、FFN2 512/512） |
-| `` `define FFN2 `` | PASS，512/512 bit-exact，0 個未驅動，536,008 cycles |
-
-| `` `define FFN1 `` + `` `define N_PASS 2 `` | PASS，兩趟各 2048/2048 bit-exact，272,538 cycles # Transformer_IP_Integrate
+# Transformer_IP_Integrate
 
 學長的 transformer（`FPGAcode_Integrate`）為底，把其中的 block 換成我們自己做的版本。
 
@@ -19,8 +16,8 @@ Behavioural simulation 用**真的 IP**（不是 `sim/stubs_*.v`）：
 
 | 模式 | 結果 |
 |---|---|
-| `` `define FFN2 `` | PASS，512/512 bit-exact，0 個未驅動，536,008 cycles（kernel 重載 4 次） |
 | `` `define FFN1 `` | PASS，2048/2048 bit-exact，0 個未驅動，136,279 cycles |
+| `` `define FFN2 `` | PASS，512/512 bit-exact，0 個未驅動，536,008 cycles（kernel 重載 4 次） |
 | `` `define SOFTMAX `` | PASS，52 組 × 64 = 3328/3328 bit-exact，11,260 cycles |
 | `` `define FFN1 `` + `` `N_PASS 2 `` | PASS，兩趟各 2048/2048 bit-exact，272,538 cycles |
 | `fsm_check_tb` (`tb/new_tb_512MAC.sv`) | PASS，4096/4096 bit-exact，0 個未驅動，173,886 cycles |
@@ -169,3 +166,69 @@ xvlog -f sim/transformer.f && xelab Transformer_top
 - `CFG_15` 多一個欄位 `cfg_ot_sft_col`（8-way 沒有）
 - `cfg_z3[0]` 就是 `cfg_gelu_en`：FFN1 開 i-GELU，FFN2 關
 - kernel 餵資料的迴圈是 16 欄不是 8 欄
+
+## 拿去學校跑 ADFP：要複製哪些檔
+
+DC / APR 的腳本學校機器上已經有（學長給的），這裡只交付**驗證過的設計檔**。整個 repo 複製過去最省事；
+若要照原本的 `design/src` 版型放，需要的是這四個目錄：
+
+| 目錄 | 內容 |
+|---|---|
+| `src/` | 全部 RTL（四個區塊 + top + FSM + 共用 leaf） |
+| `adfp/sram/` | 兩份 N16FFC SRAM wrapper（見下方撞名說明） |
+| `tb/` | `Transformer_tb.sv`（FFN1/FFN2/Softmax）、`new_tb_512MAC.sv`（SA） |
+| `pat/` | 全部測資與 gold |
+
+完整的 RTL 清單就是 `adfp/sim/vcode.f`（路徑相對 repo root）。**建議直接用它**，不要手改學長的 filelist。
+
+### 跟學長原版 filelist 的差異
+
+真正新增的檔（學長那份沒有，漏掉會 elaborate 失敗）：
+
+```
+src/FFN_module/compute_engine/FFN_i_gelu.v
+src/FFN_module/compute_engine/FFN_quan2uint8_gelu.v
+src/SOFTMAX_module/recip_lut.v
+src/common_module/DW_mult_pipe_fpga.v
+```
+
+搬位置的檔（內容不變，但路徑從 `src/FFN_module/other_module/` 變成 `src/common_module/`）：
+`count_yi_v3/v4/v5.v`、`INPUT_STREAM_if.v`、`OUTPUT_STREAM_if.v`、`yolo_rst_if.v`。
+
+### 編譯選項（跟 FFN Phase 4 一樣）
+
+```
++define+ASIC +define+RTL -timescale=1ns/1ps
+```
+
+- `ASIC`：四個區塊全部切到 ASIC 分支（N16 SRAM wrapper、DesignWare）
+- `RTL`：tb 用 repo 相對的 `pat/` 路徑、CYCLE = 10。**不要再用 `VIVA`**，那是 Vivado 專案用的絕對路徑
+- `-timescale`：RTL 是有些檔有 `` `timescale `` 有些沒有的混合體，沒給會被 VCS 擋
+
+另外要一起編進去的外部模型：四顆 N16FFC macro（`TS1N…4096X64`、`TS1N…512X32`、`TS1N…512X64`、`TSDN…512X64`，跟 FFN Phase 4 同一組）
+和三個 DesignWare（`DW02_mult_3_stage`、`DW_mult_pipe`、`DW_sqrt`，在 `$SYNOPSYS/dw/sim_ver`）。
+`adfp/sim/run_vcs_presim.sh` 就是這整套指令，設好 `SRAM_DIR` 直接跑。
+
+### SRAM wrapper 撞名（ASIC 那半）
+
+兩份 wrapper 定義的 module 名原本**完全相同**（`IF_SRAM` / `KER_SRAM` / `BIAS_SRAM` / `OT_SRAM`）但幾何不同。
+FFN 那份已改成 `FFN_IF_SRAM` 等，RTL 也是實例化這些名字。**兩份都要編，不能只用學長或 FFN 單一那份的 `sram.v`**：
+
+- `adfp/sram/sa_sram_wrappers.v` → SA 用的 `*_SRAM`
+- `adfp/sram/ffn_sram_wrappers.v` → FFN 用的 `FFN_*_SRAM`
+
+DC 那邊 SRAM 的 `.db` 照 macro 名字列，四顆都要，跟 Phase 4 相同。
+
+### 預期結果
+
+pre-sim 應該跟 FPGA 和本機 stub 版**完全一樣**（不只數值，cycle 數也一樣）：
+
+| tb | 模式 | 預期 |
+|---|---|---|
+| `Transformer_tb` | FFN1 | PASS 2048/2048（`N_PASS 2` 時 4096/4096，272,538 cycles） |
+| `Transformer_tb` | FFN2 | PASS 512/512 |
+| `Transformer_tb` | SOFTMAX | PASS 3328/3328 |
+| `fsm_check_tb` | — | PASS 4096/4096 |
+
+如果數值對但 cycle 數不同，那是真 macro 模型跟 stub 的 latency 差異，不是 RTL 問題。
+Add&Norm 沒有測資，pre-sim 只能確認它 elaborate 得過。
