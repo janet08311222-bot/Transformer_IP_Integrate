@@ -19,8 +19,8 @@
 `define End_CYCLE 50000              // Modify cycle times once your design need more cycle times!
 `define NI_DELAY  2		                // NONIDEAL delay latency
 `define AFPOS_DELAY  0.5		        // after posedge NONIDEAL delay latency
-// `define FFN1
-`define FFN2
+`define FFN1
+// `define FFN2
 //  連續跑幾趟。>1 會在「不 reset DUT」的情況下重複送 head 指令 + 資料,
 //  用來驗證 FSM 每趟都能正確收尾、下一趟不受前一趟殘留影響。
 //  每趟結果都必須各自與 gold 相符 —— 也就等於趟與趟之間完全一致。

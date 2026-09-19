@@ -156,11 +156,24 @@ div div1(
 
 ); 
 
-  // DW_sqrt is a Vivado CORDIC core. Its AXI-Stream tdata ports are byte
-  // aligned, so a 33-bit input / 17-bit output core presents 40-bit and
-  // 24-bit buses; the handshake pins also have to be driven. Zero-extend in,
-  // slice out, and hold tvalid high (the core is in NonBlocking mode, so it
-  // just streams).
+`ifdef ASIC
+  //  Synopsys DesignWare DW_sqrt: combinational, unsigned (tc_mode = 0).
+  //  root is (width+1)/2 = 17 bits, exactly sqrt_variance's width.
+  //  Zero latency where the FPGA CORDIC has a few cycles; that is fine here
+  //  because the consumer gates on (sqrt_variance > 0) rather than counting
+  //  cycles, so the result simply becomes valid a little earlier.
+  DW_sqrt #(
+      .width   ( TBITS + TBITS + fixed + fixed + 1 )
+    , .tc_mode ( 0 )
+  ) u_sqrt (
+      .a    ( variance      )
+    , .root ( sqrt_variance )
+  );
+`else
+  // DW_sqrt here is a Vivado CORDIC core (same name, different ports). Its
+  // AXI-Stream tdata is byte aligned, so a 33-bit in / 17-bit out core
+  // presents 40-bit and 24-bit buses; the handshake pins also have to be
+  // driven. Zero-extend in, slice out, hold tvalid high (NonBlocking mode).
   wire [23:0] sqrt_dout_padded ;
 
   DW_sqrt  u_sqrt(
@@ -172,6 +185,7 @@ div div1(
   );
 
   assign sqrt_variance = sqrt_dout_padded[ TBITS+fixed : 0 ] ;
+`endif
 
 
 always@(posedge clk)begin

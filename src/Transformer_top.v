@@ -12,7 +12,9 @@
 // ============================================================================
 //----    define for testing    -----
 // `define FPGA_SRAM_SETTING
-`define FPGA_ILA_CHK_SETTING
+`ifndef ASIC
+`define FPGA_ILA_CHK_SETTING   // FPGA-only ILA debug taps; off for ASIC so they do not become chip pins
+`endif
 
 module Transformer_top #(
         parameter TBITS = 64
