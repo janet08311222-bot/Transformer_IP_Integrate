@@ -228,7 +228,12 @@ pre-sim 應該跟 FPGA 和本機 stub 版**完全一樣**（不只數值，cycle
 | `Transformer_tb` | FFN1 | PASS 2048/2048（`N_PASS 2` 時 4096/4096，272,538 cycles） |
 | `Transformer_tb` | FFN2 | PASS 512/512 |
 | `Transformer_tb` | SOFTMAX | PASS 3328/3328 |
-| `fsm_check_tb` | — | PASS 4096/4096 |
+| `fsm_check_tb` | — | PASS 4096/4096（VCS 流程約 171,910 cycles） |
 
-如果數值對但 cycle 數不同，那是真 macro 模型跟 stub 的 latency 差異，不是 RTL 問題。
+**cycle 數會依模擬環境分成兩群，不是 RTL 差異**：Vivado 專案流程（`vivado/run_sim.sh`）
+跑出 SA 173,886 / Softmax 11,260；命令列 `-timescale 1ns/1ps` 流程（`adfp/sim/run_asic_sim.sh`、
+VCS）跑出 SA 171,910 / Softmax 11,312。同一路徑換旗標就跟著變，ASIC 與 FPGA 在同一組旗標下
+逐 cycle 相同。原因是 tb 用 `#0.01` 這種次 cycle 延遲驅動 TREADY，精度不同時落在不同 edge，
+SA 那 1,976 的差就是一段 2000-cycle 反壓視窗被吞掉。**判定只看 bit-exact 和未驅動字數**，
+cycle 數只在同一種流程內互比才有意義。
 Add&Norm 沒有測資，pre-sim 只能確認它 elaborate 得過。
