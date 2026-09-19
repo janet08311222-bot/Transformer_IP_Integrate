@@ -15,7 +15,7 @@
 `define FSDB_DUMP                     // for fsdb dump show waveform  
 `define EZ_S2MM_TREADY_SET
 // `define CYC_LIMIT
-`define VIVA                         // for Vivado simulation
+// (VIVA / RTL / GATE are chosen in the "simulation mode" block below)
 `define End_CYCLE 50000              // Modify cycle times once your design need more cycle times!
 `define NI_DELAY  2		                // NONIDEAL delay latency
 `define AFPOS_DELAY  0.5		        // after posedge NONIDEAL delay latency
@@ -31,87 +31,65 @@
 `endif
 // `define SOFTMAX                  // run the softmax path instead of FFN1/FFN2
 
-//-- timescale --
-`ifdef RTL
-    `timescale 1ns/100ps
-    `define CYCLE 5	                    // 200MHz  1ns*`CYCLE = 10ns / cycle
+//-- simulation mode --
+//  VIVA : Vivado project flow (xsim launched deep inside vivado/build). Local
+//         default: assumed whenever neither of the other two is given.
+//  RTL  : VCS pre-sim on the school box      -> +define+RTL   (run from repo root)
+//  GATE : VCS gate-level sim, DC netlist+SDF -> +define+GATE  (run from repo root)
+//  Only ONE copy of the clock and pattern settings lives below; the three
+//  modes used to each carry their own and drifted (stale CYCLE, wrong SDF
+//  name, and an FFN1 gold that pre-dated i-GELU).
+`ifndef RTL
+`ifndef GATE
+`define VIVA
 `endif
+`endif
+
+//-- timescale / clock --
+//  CYCLE is 10 in EVERY mode. The tb's sub-cycle delays (`CYCLE/2.5, NI_DELAY,
+//  AFPOS_DELAY) were validated at 10, and for GATE it must also be >= the SDC
+//  clock period (adfp/syn/CHIP.sdc) or the SDF run fails timing checks.
 `ifdef GATE
     `timescale 1ns/1ps
-    `define CYCLE 2
-    `define SDFFILE "../syn/DC_Results/FFN_top_syn.sdf"
-`endif
-`ifdef VIVA
+    `define CYCLE 10
+    `define SDFFILE "adfp/syn/DC_Results/Transformer_top_syn.sdf"
+`else
     `timescale 1ns/100ps
-    `define CYCLE 10	                // 100MHz
+    `define CYCLE 10
 `endif
 
 //-- pattern path --
-`ifdef RTL
-    `ifdef FFN1
-        //----input pattern ----
-        `define IF_PAT 	"../pat/input_token.dat"	
-        `define KER_PAT	"../pat/FFN_W1.dat"
-        `define BIAS_PAT	"../pat/bias1.dat"
-        //----gold pattern ----
-        `define OF_GOLD	    "../pat/FFN1_out_original.dat"
-    `else
-        //----input pattern ----
-        `define IF_PAT 	"../pat/FFN1_out_original.dat"	
-        `define KER_PAT	"../pat/FFN_W2.dat"
-        `define BIAS_PAT	"../pat/bias2.dat"
-        //----gold pattern ----
-        `define OF_GOLD	    "../pat/FFN2_out.dat"
-    `endif
-`endif
-
-`ifdef GATE
-    `ifdef FFN1
-        //----input pattern ----
-        `define IF_PAT 	"../pat/input_token.dat"	
-        `define KER_PAT	"../pat/FFN_W1.dat"
-        `define BIAS_PAT	"../pat/bias1.dat"
-        //----gold pattern ----
-        `define OF_GOLD	    "../pat/FFN1_out_original.dat"
-    `else
-        //----input pattern ----
-        `define IF_PAT 	"../pat/FFN1_out_original.dat"	
-        `define KER_PAT	"../pat/FFN_W2.dat"
-        `define BIAS_PAT	"../pat/bias2.dat"
-        //----gold pattern ----
-        `define OF_GOLD	    "../pat/FFN2_out.dat"
-    `endif
-`endif
-
-//  Patterns live in the repo's pat/ directory. The path is absolute because
-//  xsim runs from <project>.sim/sim_1/behav/xsim, several levels away from
-//  the repo root. Change PAT_DIR (one place) if the repo moves.
-`define PAT_DIR "D:/Transformer_code/Transformer_IP_Integrate/pat/"
-
+//  Vivado runs xsim from <build>/Transformer_IP.sim/sim_1/behav/xsim, so that
+//  flow needs an absolute path (change it here if the repo moves). VCS and
+//  the command-line xvlog flows are run from the repo root.
 `ifdef VIVA
-    `ifdef FFN1
-        //----input pattern ----
-        `define IF_PAT 	{`PAT_DIR, "input_token.dat"}
-        `define KER_PAT	{`PAT_DIR, "FFN_W1.dat"}
-        `define BIAS_PAT	{`PAT_DIR, "bias1.dat"}
-        //----gold pattern ----
-        //  FFN1 runs i-GELU (cfg_z3[0] = 1), so the gold is the i-GELU
-        //  reference, not the plain-requant FFN1_out_original.dat.
-        `define OF_GOLD	    {`PAT_DIR, "FFN1_igelu_out.dat"}
-    `elsif FFN2
-        //----input pattern ----
-        `define IF_PAT 	{`PAT_DIR, "FFN1_out_original.dat"}
-        `define KER_PAT	{`PAT_DIR, "FFN_W2.dat"}
-        `define BIAS_PAT	{`PAT_DIR, "bias2.dat"}
-        //----gold pattern ----
-        `define OF_GOLD	    {`PAT_DIR, "FFN2_out.dat"}
-    `else
-        `define IF_PAT 	{`PAT_DIR, "input_token.dat"}
-        `define KER_PAT	{`PAT_DIR, "FFN_W1.dat"}
-        `define BIAS_PAT	{`PAT_DIR, "bias1.dat"}
-        //----gold pattern ----
-        `define OF_GOLD	    {`PAT_DIR, "FFN1_igelu_out.dat"}
-    `endif
+    `define PAT_DIR "D:/Transformer_code/Transformer_IP_Integrate/pat/"
+`else
+    `define PAT_DIR "pat/"
+`endif
+
+`ifdef FFN1
+    //----input pattern ----
+    `define IF_PAT      {`PAT_DIR, "input_token.dat"}
+    `define KER_PAT     {`PAT_DIR, "FFN_W1.dat"}
+    `define BIAS_PAT    {`PAT_DIR, "bias1.dat"}
+    //----gold pattern ----
+    //  FFN1 runs i-GELU (cfg_z3[0] = 1), so the gold is the i-GELU
+    //  reference, not the plain-requant FFN1_out_original.dat.
+    `define OF_GOLD     {`PAT_DIR, "FFN1_igelu_out.dat"}
+`elsif FFN2
+    //----input pattern ----
+    `define IF_PAT      {`PAT_DIR, "FFN1_out_original.dat"}
+    `define KER_PAT     {`PAT_DIR, "FFN_W2.dat"}
+    `define BIAS_PAT    {`PAT_DIR, "bias2.dat"}
+    //----gold pattern ----
+    `define OF_GOLD     {`PAT_DIR, "FFN2_out.dat"}
+`else
+    `define IF_PAT      {`PAT_DIR, "input_token.dat"}
+    `define KER_PAT     {`PAT_DIR, "FFN_W1.dat"}
+    `define BIAS_PAT    {`PAT_DIR, "bias1.dat"}
+    //----gold pattern ----
+    `define OF_GOLD     {`PAT_DIR, "FFN1_igelu_out.dat"}
 `endif
 
 // =============================================================================
@@ -416,11 +394,11 @@ end
 `ifdef FSDB_DUMP
     initial begin
         `ifdef RTL
-            $fsdbDumpfile("FFN_RTL.fsdb",1000);
+            $fsdbDumpfile("Transformer_RTL.fsdb",1000);
             $fsdbDumpvars(0,"+mda","+packedmda");		//++
             $fsdbDumpMDA();
         `elsif GATE
-            $fsdbDumpfile("FFN_SYN.fsdb");	
+            $fsdbDumpfile("Transformer_SYN.fsdb");	
             $fsdbDumpvars();
         `else 
         `endif

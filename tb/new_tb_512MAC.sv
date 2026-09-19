@@ -15,58 +15,55 @@
 `define FSDB_DUMP                     // for fsdb dump show waveform  
 //`define EZ_S2MM_TREADY_SET
 `define CYC_LIMIT
-`define VIVA                         // for Vivado simulation
+// (VIVA / RTL / GATE are chosen in the "simulation mode" block below)
 `define End_CYCLE 500000              // Modify cycle times once your design need more cycle times!
 `define NI_DELAY  2		                // NONIDEAL delay latency
 `define AFPOS_DELAY  0.5		        // after posedge NONIDEAL delay latency
 
 
 
-//-- timescale --
-    `ifdef RTL
-        `timescale 1ns/100ps
-        `define CYCLE 5	                    // 200MHz  1ns*`CYCLE = 10ns / cycle
-    `endif
-    `ifdef GATE
-        `timescale 1ns/1ps
-        `define CYCLE 5
-        `define SDFFILE "../syn/DC_Results/dla512_top_syn.sdf"
-    `endif
-    `ifdef VIVA
-        `timescale 1ns/100ps
-        `define CYCLE 10	                // 100MHz
-    `endif
+//-- simulation mode --
+//  VIVA : Vivado project flow (xsim launched deep inside vivado/build). Local
+//         default: assumed whenever neither of the other two is given.
+//  RTL  : VCS pre-sim on the school box      -> +define+RTL   (run from repo root)
+//  GATE : VCS gate-level sim, DC netlist+SDF -> +define+GATE  (run from repo root)
+//  One copy of the settings below. The three modes used to each carry their
+//  own and had drifted apart: RTL pointed at Wv/V (the V projection) while
+//  the verified run is Wq/Q, GATE had the bias file commented out, CYCLE was
+//  5 in two of them, and the SDF name was the standalone block's.
+`ifndef RTL
+`ifndef GATE
+`define VIVA
+`endif
+`endif
 
+//-- timescale / clock --
+//  CYCLE is 10 in EVERY mode: the tb's sub-cycle delays were validated at 10,
+//  and for GATE it must be >= the SDC clock period (adfp/syn/CHIP.sdc).
+`ifdef GATE
+    `timescale 1ns/1ps
+    `define CYCLE 10
+    `define SDFFILE "adfp/syn/DC_Results/Transformer_top_syn.sdf"
+`else
+    `timescale 1ns/100ps
+    `define CYCLE 10
+`endif
 
 //-- pattern path --
-    `ifdef RTL
-        //----input pattern ----
-        `define IF_WPAT 	"../PAT/TF/input_token.dat"	
-        `define KER_WPAT	"../PAT/TF/Wv.dat"      //DMA_KER_TEST
-        `define BIAS_WPAT	"../PAT/TF/fake_bias.dat"
-        //----gold pattern ----
-        `define OF_GOLD	    "../PAT/TF/V.dat"
-    `endif
-
-    `ifdef GATE
-        //----input pattern ----
-        `define IF_WPAT 	"../PAT/TF/input_token.dat"	
-        `define KER_WPAT	"../PAT/TF/Wq.dat"      //DMA_KER_TEST
-        //`define BIAS_WPAT	"../PAT/layer15_bias.dat"
-        //----gold pattern ----
-        `define OF_GOLD	    "../PAT/TF/Q.dat"
-    `endif
-
-    `ifdef VIVA
-    //----input pattern ----  //C:/Users/w9601/Desktop/lyc/512PE/PAT
-        `define PAT_DIR "D:/Transformer_code/Transformer_IP_Integrate/pat/"
-        `define IF_WPAT 	{`PAT_DIR, "input_token.dat"}
-        `define KER_WPAT	{`PAT_DIR, "Wq.dat"}      //DMA_KER_TEST
-        `define BIAS_WPAT	{`PAT_DIR, "fake_bias.dat"}
-        //----gold pattern ----
-        
-        `define OF_GOLD	    {`PAT_DIR, "Q.dat"}
-    `endif
+//  Vivado runs xsim from <build>/Transformer_IP.sim/sim_1/behav/xsim, so that
+//  flow needs an absolute path (change it here if the repo moves). VCS and
+//  the command-line xvlog flows are run from the repo root.
+`ifdef VIVA
+    `define PAT_DIR "D:/Transformer_code/Transformer_IP_Integrate/pat/"
+`else
+    `define PAT_DIR "pat/"
+`endif
+    //----input pattern ----   (the verified set: Q projection, 4096/4096)
+    `define IF_WPAT     {`PAT_DIR, "input_token.dat"}
+    `define KER_WPAT    {`PAT_DIR, "Wq.dat"}
+    `define BIAS_WPAT   {`PAT_DIR, "fake_bias.dat"}
+    //----gold pattern ----
+    `define OF_GOLD     {`PAT_DIR, "Q.dat"}
 
 `define ENDIAN_SWAP(x) {x[7:0], x[15:8], x[23:16], x[31:24], x[39:32], x[47:40], x[55:48], x[63:56]}
 // =============================================================================
@@ -537,7 +534,7 @@ integer i;
                 $fsdbDumpMDA();
             `elsif GATE
                 $sdf_annotate(`SDFFILE,tp001);	//  $sdf_annotate("sdf_file"[,module_instance][,"sdf_configfile"][,"sdf_logfile"][,"mtm_spec"][,"scale_factors"][,"scale_type"]);
-                $fsdbDumpfile("dla_top_SYN.fsdb");	
+                $fsdbDumpfile("Transformer_SA_SYN.fsdb");	
                 $fsdbDumpvars();
             `else 
             `endif
