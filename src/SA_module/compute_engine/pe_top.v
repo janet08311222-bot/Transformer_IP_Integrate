@@ -121,7 +121,10 @@ wire				q_valid		[0:7]	;
 wire [TBITS-1:0]	pkg64_result	[0:7]	;
 wire				pkg64_valid		[0:7]	;
 ///////////////////////////////////////////////////
-reg [32	-1:0]	rcfg_m0_scale 		;	// declared before the ILA block below, which reads it
+reg [32	-1:0]	rcfg_m0_scale 		;	// these four are declared before the ILA block below, which reads them
+reg [8	-1:0]	rcfg_index 			;
+reg [16	-1:0]	rcfg_z_of_weight	;
+reg [8	-1:0]	rcfg_z3				;
 `ifdef FPGA_ILA_CHK_SETTING
 	output wire [TBITS-1:0]	ick_pkg64_result_0		;
 	assign ick_pkg64_result_0 = pkg64_result[0]		;
@@ -185,9 +188,6 @@ reg [32	-1:0]	rcfg_m0_scale 		;	// declared before the ILA block below, which re
 	assign ick_frowpe_bias_7	= frowpe_bias[7]	;
 `endif 
 //////////////////////////////////
-reg [8	-1:0]	rcfg_index 			;
-reg [16	-1:0]	rcfg_z_of_weight	;
-reg [8	-1:0]	rcfg_z3				;
 
 
 always @(posedge clk ) begin

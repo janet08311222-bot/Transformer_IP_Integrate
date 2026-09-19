@@ -12,7 +12,9 @@
 // ============================================================================
 
 `define ROW_DELAY 20
-`define FSDB_DUMP                     // for fsdb dump show waveform  
+`ifdef VCS
+`define FSDB_DUMP                     // fsdb needs Verdi's PLI - only under VCS
+`endif
 //`define EZ_S2MM_TREADY_SET
 `define CYC_LIMIT
 // (VIVA / RTL / GATE are chosen in the "simulation mode" block below)
@@ -43,7 +45,7 @@
 `ifdef GATE
     `timescale 1ns/1ps
     `define CYCLE 10
-    `define SDFFILE "adfp/syn/DC_Results/Transformer_top_syn.sdf"
+    `define SDFFILE "../syn/DC_Results/Transformer_top_syn.sdf"
 `else
     `timescale 1ns/100ps
     `define CYCLE 10
@@ -51,12 +53,12 @@
 
 //-- pattern path --
 //  Vivado runs xsim from <build>/Transformer_IP.sim/sim_1/behav/xsim, so that
-//  flow needs an absolute path (change it here if the repo moves). VCS and
-//  the command-line xvlog flows are run from the repo root.
+//  flow needs an absolute path (change it here if the repo moves). VCS is run
+//  from pre_sim/ (the ADFP convention: everything is ../ from there).
 `ifdef VIVA
     `define PAT_DIR "D:/Transformer_code/Transformer_IP_Integrate/pat/"
 `else
-    `define PAT_DIR "pat/"
+    `define PAT_DIR "../pat/"
 `endif
     //----input pattern ----   (the verified set: Q projection, 4096/4096)
     `define IF_WPAT     {`PAT_DIR, "input_token.dat"}
