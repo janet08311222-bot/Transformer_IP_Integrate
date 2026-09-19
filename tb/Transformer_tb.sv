@@ -303,13 +303,17 @@ localparam DATA_W           = 64;
 localparam KEEP_W           = DATA_W/8;
 
 reg  [DATA_W-1:0] input_mem     [0:4095];
-reg  [15:0]       golden_output [0:4095];
+reg  [63:0]       golden_output [0:4095];	// 64-bit: output.dat lines are 16 hex chars. VCS rejects a
+												// too-wide entry ("Illegal entry") and stops loading; xsim
+												// silently truncated. Widen the array, slice on compare.
 
 integer total_group;
 integer i;
 integer group_id;
 integer out_idx;
 integer err_cnt;
+integer gold_x_cnt;	// gold entries that are X (file not loaded / bad format)
+integer out_x_cnt;	// DUT outputs that are X
 
 //---------- design under test (DUT) output declare-----------------
 reg dutot_done =0;		// DUT output done we can compare data with gold pattern
@@ -480,7 +484,9 @@ begin
         if (M_AXIS_S2MM_TVALID && M_AXIS_S2MM_TREADY) begin
             out16 = M_AXIS_S2MM_TDATA[15:0];
 
-            if (out16 !== golden_output[gid*OUTS_PER_GROUP + out_idx]) begin
+            if (golden_output[gid*OUTS_PER_GROUP + out_idx][15:0] === 16'bx) gold_x_cnt = gold_x_cnt + 1;
+            if (out16 === 16'bx) out_x_cnt = out_x_cnt + 1;
+            if (out16 !== golden_output[gid*OUTS_PER_GROUP + out_idx][15:0]) begin
                 $display("[TB][MIS] G%0d idx%0d : got=%04h exp=%04h",
                          gid, out_idx, out16, golden_output[gid*OUTS_PER_GROUP + out_idx]);
                 err_cnt = err_cnt + 1;
@@ -524,6 +530,8 @@ initial begin
         M_AXIS_S2MM_TREADY = 1'b1;
 
         err_cnt = 0;
+        gold_x_cnt = 0;
+        out_x_cnt = 0;
 
         for (group_id = 0; group_id < total_group; group_id = group_id + 1) begin
             $display("[TB] ===== Start Group %0d =====", group_id);
@@ -541,8 +549,13 @@ initial begin
         $display("====================================================================");
         $display(">>> softmax: %0d groups x 64 outputs = %0d words compared against gold",
                  total_group, total_group*64);
+        $display(">>> gold entries that are X : %0d   DUT outputs that are X : %0d", gold_x_cnt, out_x_cnt);
         if( total_group == 0 )
             $display(">>> RESULT: FAIL  (no input groups loaded - check pat/rearrange.dat)");
+        else if( gold_x_cnt != 0 )
+            $display(">>> RESULT: FAIL  (gold not loaded: %0d X entries - check pat/output.dat path AND format: 4 hex chars per line)", gold_x_cnt);
+        else if( out_x_cnt != 0 )
+            $display(">>> RESULT: FAIL  (%0d DUT outputs are X)", out_x_cnt);
         else if( err_cnt == 0 )
             $display(">>> RESULT: PASS  (%0d/%0d bit-exact)", total_group*64, total_group*64);
         else
