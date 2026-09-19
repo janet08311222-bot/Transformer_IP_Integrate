@@ -461,39 +461,50 @@ integer i;
 
     
     
-    Transformer_top	#(
-            .TBITS(TBITS)
-        ,	.TBYTE(TBYTE)
-    )
-    tp001(	.clk	(	clk		)
-        ,	.resetn	(	~reset	)
+//  DUT: Transformer_top directly, or the pad-ring CHIP wrapper with
+//  +define+CHIP (the senior's CHIP.v with its inner instance swapped to
+//  Transformer_top). CHIP exposes pad-side names and has no TKEEP pads -
+//  TKEEP is never read by any logic below the top, so it is simply not
+//  connected. Hierarchical probes (watchdog) go through `DUT_CORE.
+`ifdef CHIP
+    `define DUT_CORE tp001.Transformer_top_1
+CHIP tp001(
+        .AC     (	clk		)
+    ,	.ARESET	(	~reset	)
 
-        ,	.S_AXIS_MM2S_TVALID	(	S_AXIS_MM2S_TVALID	)
-        ,	.S_AXIS_MM2S_TREADY	(	S_AXIS_MM2S_TREADY	)
-        ,	.S_AXIS_MM2S_TDATA	(	S_AXIS_MM2S_TDATA	)
-        ,	.S_AXIS_MM2S_TKEEP	(	S_AXIS_MM2S_TKEEP	)
-        ,	.S_AXIS_MM2S_TLAST	(	S_AXIS_MM2S_TLAST	)
+    ,	.V_in	(	S_AXIS_MM2S_TVALID	)
+    ,	.R_out	(	S_AXIS_MM2S_TREADY	)
+    ,	.D_in	(	S_AXIS_MM2S_TDATA	)
+    ,	.L_in	(	S_AXIS_MM2S_TLAST	)
 
-        ,	.M_AXIS_S2MM_TVALID	(	M_AXIS_S2MM_TVALID	)
-        ,	.M_AXIS_S2MM_TREADY	(	M_AXIS_S2MM_TREADY	)
-        ,	.M_AXIS_S2MM_TDATA	(	M_AXIS_S2MM_TDATA	)
-        ,	.M_AXIS_S2MM_TKEEP	(	M_AXIS_S2MM_TKEEP	)
-        ,	.M_AXIS_S2MM_TLAST	(	M_AXIS_S2MM_TLAST	)
-
-    
-        // //----tb top instance start------ 
-        // ,	.valid_to_pe_0 ( p_valid_0 ),	.final_to_pe_0 ( p_final_0 ),	.dout_if_0 ( p_if_0 ),	.dout_ke_0 ( p_ke_0 ),	.dout_bi_0 ( p_bi_0 )//-- PE block -0-
-        // ,	.valid_to_pe_1 ( p_valid_1 ),	.final_to_pe_1 ( p_final_1 ),	.dout_if_1 ( p_if_1 ),	.dout_ke_1 ( p_ke_1 ),	.dout_bi_1 ( p_bi_1 )//-- PE block -1-
-        // ,	.valid_to_pe_2 ( p_valid_2 ),	.final_to_pe_2 ( p_final_2 ),	.dout_if_2 ( p_if_2 ),	.dout_ke_2 ( p_ke_2 ),	.dout_bi_2 ( p_bi_2 )//-- PE block -2-
-        // ,	.valid_to_pe_3 ( p_valid_3 ),	.final_to_pe_3 ( p_final_3 ),	.dout_if_3 ( p_if_3 ),	.dout_ke_3 ( p_ke_3 ),	.dout_bi_3 ( p_bi_3 )//-- PE block -3-
-        // ,	.valid_to_pe_4 ( p_valid_4 ),	.final_to_pe_4 ( p_final_4 ),	.dout_if_4 ( p_if_4 ),	.dout_ke_4 ( p_ke_4 ),	.dout_bi_4 ( p_bi_4 )//-- PE block -4-
-        // ,	.valid_to_pe_5 ( p_valid_5 ),	.final_to_pe_5 ( p_final_5 ),	.dout_if_5 ( p_if_5 ),	.dout_ke_5 ( p_ke_5 ),	.dout_bi_5 ( p_bi_5 )//-- PE block -5-
-        // ,	.valid_to_pe_6 ( p_valid_6 ),	.final_to_pe_6 ( p_final_6 ),	.dout_if_6 ( p_if_6 ),	.dout_ke_6 ( p_ke_6 ),	.dout_bi_6 ( p_bi_6 )//-- PE block -6-
-        // ,	.valid_to_pe_7 ( p_valid_7 ),	.final_to_pe_7 ( p_final_7 ),	.dout_if_7 ( p_if_7 ),	.dout_ke_7 ( p_ke_7 ),	.dout_bi_7 ( p_bi_7 )//-- PE block -7-
-        // //----tb top instance end------ 
-
-
+    ,	.V_out	(	M_AXIS_S2MM_TVALID	)
+    ,	.R_in	(	M_AXIS_S2MM_TREADY	)
+    ,	.D_out	(	M_AXIS_S2MM_TDATA	)
+    ,	.L_out	(	M_AXIS_S2MM_TLAST	)
 );
+    assign M_AXIS_S2MM_TKEEP = 8'hff ;	// no TKEEP pad on the chip
+`else
+    `define DUT_CORE tp001
+Transformer_top #(
+        .TBITS(TBITS)
+    ,	.TBYTE(TBYTE)
+)tp001(	
+        .clk	(	clk		)
+    ,	.resetn	(	~reset	)
+
+    ,	.S_AXIS_MM2S_TVALID	(	S_AXIS_MM2S_TVALID	)
+    ,	.S_AXIS_MM2S_TREADY	(	S_AXIS_MM2S_TREADY	)
+    ,	.S_AXIS_MM2S_TDATA	(	S_AXIS_MM2S_TDATA	)
+    ,	.S_AXIS_MM2S_TKEEP	(	S_AXIS_MM2S_TKEEP	)
+    ,	.S_AXIS_MM2S_TLAST	(	S_AXIS_MM2S_TLAST	)
+
+    ,	.M_AXIS_S2MM_TVALID	(	M_AXIS_S2MM_TVALID	)
+    ,	.M_AXIS_S2MM_TREADY	(	M_AXIS_S2MM_TREADY	)
+    ,	.M_AXIS_S2MM_TDATA	(	M_AXIS_S2MM_TDATA	)
+    ,	.M_AXIS_S2MM_TKEEP	(	M_AXIS_S2MM_TKEEP	)
+    ,	.M_AXIS_S2MM_TLAST	(	M_AXIS_S2MM_TLAST	)
+);
+`endif
 
 
 
@@ -701,16 +712,16 @@ integer i;
         #( `CYCLE*5 ) ;
 
         //---- SA HEAD ----
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= SA_HEAD ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= SA_HEAD ;
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= SA_HEAD ;	
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= SA_HEAD ;	
         S_AXIS_MM2S_TLAST	= 1;	// last signal 
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         //----- instruction --------------
         // for( iix = 0 ; iix <1 ; iix=iix+1 )begin
-        // 	@( posedge clk );
+        // 	@( posedge clk ); #( `CYCLE/2.5 );
         // 	S_AXIS_MM2S_TVALID = 1 ;
         // 	S_AXIS_MM2S_TDATA	= TS_INST_HEAD ;
         // 	wait(S_AXIS_MM2S_TREADY);
@@ -738,77 +749,77 @@ integer i;
 
         #( `CYCLE*30 ) ;
         //----- instruction config--------------
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_0 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_1 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 0 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_2 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_3 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_4 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_5 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_6 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_7 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_8 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_9 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_10 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_11 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_12 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_13 ;
             wait(S_AXIS_MM2S_TREADY);
 
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_14 ;
             wait(S_AXIS_MM2S_TREADY);
 
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= TS_CFG_15 ;
             S_AXIS_MM2S_TLAST = 1 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TLAST = 0 ;
             S_AXIS_MM2S_TVALID = 0 ;
             iix = 0 ;
@@ -827,12 +838,12 @@ integer i;
         //---- first load -- sending kernel data ----
         //------------ now send kernel sram  data -----
             //---- DATA HEAD ----
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= TS_DATA_HEAD ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= TS_DATA_HEAD ;
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= TS_DATA_HEAD ;	
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= TS_DATA_HEAD ;	
             S_AXIS_MM2S_TLAST	= 1;	// last signal 
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
             $display("TB_RUN_KERSRAM_LENGTH_1 = %d " , TB_RUN_KERSRAM_LENGTH_1);
             //---- DATA HEAD end---------------------
             for ( i1=0 ; i1<TB_RUN_KERSRAM_LENGTH_1 ; i1=i1+1 )begin	// each kernel sram need 288 address data
@@ -858,12 +869,12 @@ integer i;
         //------------ now send bias sram data -----
         tst_fl_sent_bias = 1 ;
             //---- DATA HEAD ----
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= TS_DATA_HEAD ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= TS_DATA_HEAD ;
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= TS_DATA_HEAD ;	
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= TS_DATA_HEAD ;	
             S_AXIS_MM2S_TLAST	= 1;	// last signal 
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
             $display("TB_RUN_BIAS_LENGTH = %d " , TB_RUN_BIAS_LENGTH);
             //---- DATA HEAD end---------------------
             for ( i1=0 ; i1<TB_RUN_BIAS_LENGTH ; i1=i1+1 )begin	

@@ -21,6 +21,8 @@
 # ============================================================================
 set -e
 sim_top="${1:-Transformer_tb}"
+#  bash adfp/sim/run_asic_sim.sh Transformer_tb CHIP   -> DUT is the pad-ring CHIP wrapper
+chip_def=""; [ "${2:-}" = "CHIP" ] && chip_def="-d CHIP"
 case "$sim_top" in
     Transformer_tb) tb_file=tb/Transformer_tb.sv ;;
     fsm_check_tb)   tb_file=tb/new_tb_512MAC.sv ;;
@@ -37,15 +39,16 @@ log="adfp/sim/log_${sim_top}"
 rm -rf "$log" xsim.dir; mkdir -p "$log"
 
 echo "==== compile (+define+ASIC) ===="
-xvlog --nolog -d ASIC -sv \
+xvlog --nolog -d ASIC $chip_def -sv \
     -f adfp/sim/vcode.f \
     adfp/sim/n16_macro_stubs.v \
     adfp/sim/designware_stubs.v \
+    adfp/sim/pad_stubs.v \
     "$tb_file" \
     -log "$log/xvlog.log"
 
 echo "==== elaborate ===="
-xelab --nolog -d ASIC -timescale 1ns/1ps --relax \
+xelab --nolog -d ASIC $chip_def -timescale 1ns/1ps --relax \
     -s "${sim_top}_asic" "$sim_top" -log "$log/xelab.log"
 
 echo "==== simulate ===="

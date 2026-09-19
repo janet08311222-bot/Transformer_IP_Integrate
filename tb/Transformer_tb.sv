@@ -346,6 +346,30 @@ integer icp;
 // ============================================================================
 // ================			instance DUT		===============================
 // ============================================================================
+//  DUT: Transformer_top directly, or the pad-ring CHIP wrapper with
+//  +define+CHIP (the senior's CHIP.v with its inner instance swapped to
+//  Transformer_top). CHIP exposes pad-side names and has no TKEEP pads -
+//  TKEEP is never read by any logic below the top, so it is simply not
+//  connected. Hierarchical probes (watchdog) go through `DUT_CORE.
+`ifdef CHIP
+    `define DUT_CORE tp001.Transformer_top_1
+CHIP tp001(
+        .AC     (	clk		)
+    ,	.ARESET	(	~reset	)
+
+    ,	.V_in	(	S_AXIS_MM2S_TVALID	)
+    ,	.R_out	(	S_AXIS_MM2S_TREADY	)
+    ,	.D_in	(	S_AXIS_MM2S_TDATA	)
+    ,	.L_in	(	S_AXIS_MM2S_TLAST	)
+
+    ,	.V_out	(	M_AXIS_S2MM_TVALID	)
+    ,	.R_in	(	M_AXIS_S2MM_TREADY	)
+    ,	.D_out	(	M_AXIS_S2MM_TDATA	)
+    ,	.L_out	(	M_AXIS_S2MM_TLAST	)
+);
+    assign M_AXIS_S2MM_TKEEP = 8'hff ;	// no TKEEP pad on the chip
+`else
+    `define DUT_CORE tp001
 Transformer_top #(
         .TBITS(TBITS)
     ,	.TBYTE(TBYTE)
@@ -365,6 +389,7 @@ Transformer_top #(
     ,	.M_AXIS_S2MM_TKEEP	(	M_AXIS_S2MM_TKEEP	)
     ,	.M_AXIS_S2MM_TLAST	(	M_AXIS_S2MM_TLAST	)
 );
+`endif
 
 `ifdef GATE
     initial $sdf_annotate(`SDFFILE,tp001);	//  $sdf_annotate("sdf_file"[,module_instance][,"sdf_configfile"][,"sdf_logfile"][,"mtm_spec"][,"scale_factors"][,"scale_type"]);
@@ -449,12 +474,12 @@ task automatic axis_send_group(input integer gid);
 begin
     //---- SOFTMAX HEAD ----
     wait(S_AXIS_MM2S_TREADY);
-    @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= SOFTMAX_HEAD ;
+    @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= SOFTMAX_HEAD ;
     wait(S_AXIS_MM2S_TREADY);
-    @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= SOFTMAX_HEAD ;	
+    @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= SOFTMAX_HEAD ;	
     S_AXIS_MM2S_TLAST	= 1;	// last signal 
     wait(S_AXIS_MM2S_TREADY);
-    @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+    @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
     
     for (k = 0; k < BEATS_PER_GROUP; k = k + 1) begin
         wait(S_AXIS_MM2S_TREADY)
@@ -600,12 +625,12 @@ initial begin
         @( posedge clk ); pass_rst = 1'b0 ;
 
         //---- FFN HEAD ----
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
         S_AXIS_MM2S_TLAST	= 1;	// last signal 
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         // //----- instruction head --------------
         // @( posedge clk );#0.8;
@@ -628,92 +653,92 @@ initial begin
         // #( `CYCLE*30 ) ;
 
         //----- instruction head --------------
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;	
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;	
         S_AXIS_MM2S_TLAST	= 1;	// last signal 
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         // //---- FFN HEAD ----
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
         // S_AXIS_MM2S_TLAST	= 1;	// last signal 
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         //----- instruction config--------------
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_0 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_1 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_2 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_3 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_4 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_5 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_6 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_7 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_8 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_9 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_10 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_11 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_12 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_13 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_14 ;
-        // @( posedge clk );
+        // @( posedge clk ); #( `CYCLE/2.5 );
         //     S_AXIS_MM2S_TVALID = 0 ;
         //     S_AXIS_MM2S_TDATA	= 64'd0 ;
         // #( `CYCLE*10);
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_15 ;
             S_AXIS_MM2S_TLAST = 1 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TLAST = 0 ;
             S_AXIS_MM2S_TVALID = 0 ;
         //----- instruction done --------------
@@ -742,31 +767,31 @@ initial begin
         // #( `CYCLE*30 ) ;
 
         // //---- FFN HEAD ----
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
         // S_AXIS_MM2S_TLAST	= 1;	// last signal 
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
     
         //------------------------------------------------
         //---- first load -- sending input data ----
         //---- DATA HEAD ----
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
         S_AXIS_MM2S_TLAST	= 1;	// last signal 
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
         //---- DATA HEAD end---------------------
 
         // //---- FFN HEAD ----
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
         // S_AXIS_MM2S_TLAST	= 1;	// last signal 
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         //------------ now send input sram data -----
         for ( i0=0 ; i0<TB_RUN_COL*TB_RUN_ROW ; i0=i0+1 )begin
@@ -784,22 +809,22 @@ initial begin
         S_AXIS_MM2S_TLAST = 0 ;
 
         // //---- FFN HEAD ----
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
         // S_AXIS_MM2S_TLAST	= 1;	// last signal 
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         // //------------------------------------------------
         // //---- first load -- sending bias data ----
         // //---- DATA HEAD ----
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
         // S_AXIS_MM2S_TLAST	= 1;	// last signal 
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         //---- DATA HEAD ----
         @( posedge clk );#0.8;
@@ -823,12 +848,12 @@ initial begin
         //---- DATA HEAD end---------------------
 
         // //---- FFN HEAD ----
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
         // S_AXIS_MM2S_TLAST	= 1;	// last signal 
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         // //---- FFN HEAD ----
         // @( posedge clk );#0.8;
@@ -872,31 +897,31 @@ initial begin
         S_AXIS_MM2S_TLAST = 0 ;
 
         // //---- FFN HEAD ----
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
         // S_AXIS_MM2S_TLAST	= 1;	// last signal 
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         //------------------------------------------------
         //---- first load -- sending kernel data ----
         //---- DATA HEAD ----
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
         S_AXIS_MM2S_TLAST	= 1;	// last signal 
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
         //---- DATA HEAD end---------------------
 
         // //---- FFN HEAD ----
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
         // S_AXIS_MM2S_TLAST	= 1;	// last signal 
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         //------------ now send kernel sram data -----
         for ( i0=0 ; i0<TB_KER_ROW * 16 ; i0=i0+1 )begin	   // 16 = ker_col (PEBLKCOL_NUM, Phase 1b)
@@ -925,12 +950,12 @@ initial begin
         for(i1=0; i1<3; i1=i1+1)begin
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             //------------ now send kernel sram data -----
             //---- DATA HEAD -----------------------
@@ -957,12 +982,12 @@ initial begin
 	        //---- DATA HEAD end---------------------
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             for ( i0=0 ; i0<TB_KER_ROW * 512 ; i0=i0+1 )begin
                 @(posedge clk ); #( `CYCLE/2.5 );
@@ -979,30 +1004,30 @@ initial begin
 	        S_AXIS_MM2S_TLAST = 0 ;
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             //------------ now send bias sram data -----
             //---- DATA HEAD ----
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
             S_AXIS_MM2S_TLAST	= 1;	// last signal 
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
             //---- DATA HEAD end---------------------
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             for ( i0=0 ; i0<TB_RUN_BIAS_LENGTH/4 ; i0=i0+1 )begin	   
                 @(posedge clk );#( `CYCLE/2.5 );
@@ -1020,30 +1045,30 @@ initial begin
         end
 
         // //---- FFN HEAD ----
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
         // S_AXIS_MM2S_TLAST	= 1;	// last signal 
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         //------------ now send kernel sram data -----
         //---- DATA HEAD ----
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
         S_AXIS_MM2S_TLAST	= 1;	// last signal 
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
         //---- DATA HEAD end---------------------
 
         // //---- FFN HEAD ----
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
         // S_AXIS_MM2S_TLAST	= 1;	// last signal 
         // wait(S_AXIS_MM2S_TREADY);
-        // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         for ( i0=0; i0<TB_KER_ROW * ( 512 - 16 ); i0=i0+1)begin  
             @(posedge clk );#( `CYCLE/2.5 );
@@ -1090,12 +1115,12 @@ initial begin
             ker_addr = 0 ;
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             // //----- instruction head --------------
             // @( posedge clk );#0.8;
@@ -1109,12 +1134,12 @@ initial begin
             // #( `CYCLE*10);
 
             //---- FFN HEAD ----
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             S_AXIS_MM2S_TLAST	= 1;	// last signal 
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             // //----- instruction head --------------
             // @( posedge clk );#0.8;
@@ -1128,118 +1153,118 @@ initial begin
             // #( `CYCLE*30 ) ;
 
             //----- instruction head --------------
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;	
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;	
             S_AXIS_MM2S_TLAST	= 1;	// last signal 
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             //----- instruction config--------------
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_0 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_1 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_2 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_3 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_4 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_5 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_6 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_7 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_8 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_9 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_10 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_11 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_12 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_13 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_14 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TVALID = 1 ;
                 S_AXIS_MM2S_TDATA	= CFG_15 ;
                 S_AXIS_MM2S_TLAST = 1 ;
                 wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );
+            @( posedge clk ); #( `CYCLE/2.5 );
                 S_AXIS_MM2S_TLAST = 0 ;
                 S_AXIS_MM2S_TVALID = 0 ;
             //----- instruction done --------------
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             //------------------------------------------------
             //---- first load -- sending input data ----
             //---- DATA HEAD ----
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
             S_AXIS_MM2S_TLAST	= 1;	// last signal 
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
             //---- DATA HEAD end---------------------
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             //------------ now send input sram  data -----
             for ( i0=0 ; i0<TB_RUN_COL*TB_RUN_ROW/4 ; i0=i0+1 )begin
@@ -1257,31 +1282,31 @@ initial begin
                 S_AXIS_MM2S_TLAST = 0 ;
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             //------------------------------------------------
             //---- first load -- sending bias data ----
             //---- DATA HEAD ----
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
             S_AXIS_MM2S_TLAST	= 1;	// last signal 
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
             //---- DATA HEAD end---------------------
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             //------------ now send bias sram data -----
             for ( i0=0 ; i0<TB_RUN_BIAS_LENGTH ; i0=i0+1 )begin	   
@@ -1299,31 +1324,31 @@ initial begin
                 S_AXIS_MM2S_TLAST = 0 ;
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             //------------------------------------------------
             //---- first load -- sending kernel data ----
             //---- DATA HEAD ----
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
             S_AXIS_MM2S_TLAST	= 1;	// last signal 
             wait(S_AXIS_MM2S_TREADY);
-            @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
             //---- DATA HEAD end---------------------
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             //------------ now send kernel sram data -----
             for ( i0=0 ; i0<TB_KER_ROW * 16 ; i0=i0+1 )begin	   // 16 = ker_col (PEBLKCOL_NUM, Phase 1b)
@@ -1346,12 +1371,12 @@ initial begin
             //----- after first load data we going to send kernel data  --------------
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             //---- DATA HEAD -----------------------
             i0 = 0 ;
@@ -1377,12 +1402,12 @@ initial begin
             //---- DATA HEAD end---------------------
 
             // //---- FFN HEAD ----
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
             // S_AXIS_MM2S_TLAST	= 1;	// last signal 
             // wait(S_AXIS_MM2S_TREADY);
-            // @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+            // @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
             for ( i0=0 ; i0<TB_KER_ROW * (512-16) ; i0=i0+1 )begin
                 @(posedge clk ); #( `CYCLE/2.5 );
@@ -1428,88 +1453,88 @@ initial begin
         ker_addr = 0 ;
 
         //---- FFN HEAD ----
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= FFN_HEAD ;	
         S_AXIS_MM2S_TLAST	= 1;	// last signal 
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         //----- instruction head --------------
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;	
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= INST_HEAD ;	
         S_AXIS_MM2S_TLAST	= 1;	// last signal 
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
 
         //----- instruction config--------------
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_0 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_1 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_2 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_3 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_4 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_5 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_6 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_7 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_8 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_9 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_10 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_11 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_12 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_13 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_14 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TVALID = 1 ;
             S_AXIS_MM2S_TDATA	= CFG_15 ;
             S_AXIS_MM2S_TLAST = 1 ;
             wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );
+        @( posedge clk ); #( `CYCLE/2.5 );
             S_AXIS_MM2S_TLAST = 0 ;
             S_AXIS_MM2S_TVALID = 0 ;
         //----- instruction done --------------
@@ -1517,12 +1542,12 @@ initial begin
         //------------------------------------------------
         //---- first load -- sending input data ----
         //---- DATA HEAD ----
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
         S_AXIS_MM2S_TLAST	= 1;	// last signal 
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
         //---- DATA HEAD end---------------------
 
         //------------ now send input sram  data -----
@@ -1543,12 +1568,12 @@ initial begin
         //------------------------------------------------
         //---- first load -- sending bias data ----
         //---- DATA HEAD ----
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
         S_AXIS_MM2S_TLAST	= 1;	// last signal 
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
         //---- DATA HEAD end---------------------
 
         //------------ now send bias sram data -----
@@ -1569,12 +1594,12 @@ initial begin
         //------------------------------------------------
         //---- first load -- sending kernel data ----
         //---- DATA HEAD ----
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TVALID = 1 ;	S_AXIS_MM2S_TDATA	= DATA_HEAD ;	
         S_AXIS_MM2S_TLAST	= 1;	// last signal 
         wait(S_AXIS_MM2S_TREADY);
-        @( posedge clk );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
+        @( posedge clk ); #( `CYCLE/2.5 );	S_AXIS_MM2S_TLAST = 0 ;		S_AXIS_MM2S_TVALID = 0 ;
         //---- DATA HEAD end---------------------
 
         //------------ now send kernel sram data -----
@@ -1819,7 +1844,7 @@ end
             $display(">>> WATCHDOG: streamed so far -> ker_addr=%0d (full=%0d), bias_addr=%0d, ifmap_addr=%0d",
                      ker_addr, TB_RUN_KERSRAM_LENGTH, bias_addr, ifmap_addr);
             $display(">>> WATCHDOG: FSM state=%0d mode=%0d | SA_busy=%b NORM_busy=%b FFN_busy=%b",
-                     tp001.curr_state, tp001.mode, tp001.SA_busy, tp001.NORM_busy, tp001.FFN_busy);
+                     `DUT_CORE.curr_state, `DUT_CORE.mode, `DUT_CORE.SA_busy, `DUT_CORE.NORM_busy, `DUT_CORE.FFN_busy);
             $display("====================================================================");
             dutot_done = 1 ;            // let the compare block run with what was produced
         end

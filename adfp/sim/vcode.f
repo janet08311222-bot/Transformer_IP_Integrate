@@ -107,6 +107,9 @@ src/Add_Norm_module/mean.v
 src/Add_Norm_module/sub.v
 src/Add_Norm_module/var.v
 
+// ---- pad-ring wrapper (only used when the tb is compiled with +define+CHIP) ----
+adfp/CHIP.v
+
 // ---- ASIC SRAM wrappers (N16FFC macros inside; names differ per block) ----
 // IF_SRAM / KER_SRAM / BIAS_SRAM / OT_SRAM
 adfp/sram/sa_sram_wrappers.v
