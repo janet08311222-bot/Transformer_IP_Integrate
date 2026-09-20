@@ -23,6 +23,8 @@ set -e
 sim_top="${1:-Transformer_tb}"
 #  bash adfp/sim/run_asic_sim.sh Transformer_tb CHIP   -> DUT is the pad-ring CHIP wrapper
 chip_def=""; [ "${2:-}" = "CHIP" ] && chip_def="-d CHIP"
+#  extra +defines via EXTRA_DEFS="-d XPROBE" bash adfp/sim/run_asic_sim.sh ...
+chip_def="$chip_def ${EXTRA_DEFS:-}"
 case "$sim_top" in
     Transformer_tb) tb_file=tb/Transformer_tb.sv ;;
     fsm_check_tb)   tb_file=tb/new_tb_512MAC.sv ;;

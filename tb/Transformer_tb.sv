@@ -1843,8 +1843,10 @@ end
             $display(">>> WATCHDOG: stream/DUT stalled; produced ot_addr=%0d output words.", ot_addr);
             $display(">>> WATCHDOG: streamed so far -> ker_addr=%0d (full=%0d), bias_addr=%0d, ifmap_addr=%0d",
                      ker_addr, TB_RUN_KERSRAM_LENGTH, bias_addr, ifmap_addr);
+`ifndef GATE   // hierarchy is flattened / renamed in the DC netlist
             $display(">>> WATCHDOG: FSM state=%0d mode=%0d | SA_busy=%b NORM_busy=%b FFN_busy=%b",
                      `DUT_CORE.curr_state, `DUT_CORE.mode, `DUT_CORE.SA_busy, `DUT_CORE.NORM_busy, `DUT_CORE.FFN_busy);
+`endif
             $display("====================================================================");
             dutot_done = 1 ;            // let the compare block run with what was produced
         end
@@ -1943,5 +1945,22 @@ end
 
 
 
+`ifdef XPROBE
+//  Gate-level X hunt: report the first X seen on the core output-FIFO write
+//  side. RTL sim treats an X strobe as 0 and hides it; the netlist does not.
+integer xp_n = 0;
+always @(posedge clk) if (xp_n < 12 && cycle > 30) begin
+    if (`DUT_CORE.osif_write === 1'bx || `DUT_CORE.osif_last_din === 1'bx || `DUT_CORE.osif_full_n === 1'bx ||
+        `DUT_CORE.FFN_ot2fifo_write === 1'bx || `DUT_CORE.FFN_ot2fifo_last === 1'bx ||
+        ^`DUT_CORE.mode === 1'bx || ^`DUT_CORE.curr_state === 1'bx || `DUT_CORE.isif_read === 1'bx ||
+        `DUT_CORE.M_AXIS_S2MM_TVALID === 1'bx || `DUT_CORE.S_AXIS_MM2S_TREADY === 1'bx) begin
+        xp_n = xp_n + 1;
+        $display(">>> XPROBE cyc=%0d state=%0d mode=%0d osif_write=%b last=%b full_n=%b FFN_w=%b FFN_l=%b isif_read=%b TVALID=%b TREADY=%b data_x=%0d",
+            cycle, `DUT_CORE.curr_state, `DUT_CORE.mode, `DUT_CORE.osif_write, `DUT_CORE.osif_last_din, `DUT_CORE.osif_full_n,
+            `DUT_CORE.FFN_ot2fifo_write, `DUT_CORE.FFN_ot2fifo_last, `DUT_CORE.isif_read,
+            `DUT_CORE.M_AXIS_S2MM_TVALID, `DUT_CORE.S_AXIS_MM2S_TREADY, (^`DUT_CORE.osif_data_din === 1'bx));
+    end
+end
+`endif
 endmodule
 
