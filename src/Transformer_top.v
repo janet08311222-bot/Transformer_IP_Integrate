@@ -138,6 +138,10 @@ module Transformer_top #(
     wire 				SOFTMAX_osif_full_n			;
     wire 				SOFTMAX_osif_write			;
     wire [TBITS-1: 0 ]	SOFTMAX_osif_data_din		;
+    //  softmax_top.SOFT_OUT is 16 bits. Simulators pad a 16->64 port
+    //  connection with Z, but DC rejects it (LINK-3), so widen it explicitly.
+    wire [15:0]         SOFTMAX_out16               ;
+    assign SOFTMAX_osif_data_din = { {(TBITS-16){1'b0}}, SOFTMAX_out16 } ;
     wire 				SOFTMAX_osif_last_din		;
     wire [TBYTE-1: 0 ]	SOFTMAX_osif_strb_din		;
     wire 				SOFTMAX_osif_user_din		;
@@ -153,6 +157,9 @@ module Transformer_top #(
     wire 				NORM_osif_full_n			;
     wire 				NORM_osif_write				;
     wire [TBITS-1: 0 ]	NORM_osif_data_din		    ;
+    //  addnormtop.out_data is TBITS+fixed = 16 bits; same LINK-3 fix as above.
+    wire [15:0]         NORM_out16                  ;
+    assign NORM_osif_data_din = { {(TBITS-16){1'b0}}, NORM_out16 } ;
     wire 				NORM_osif_last_din		    ;
     wire [TBYTE-1: 0 ]	NORM_osif_strb_din			;
     wire 				NORM_osif_user_din			;
@@ -336,7 +343,7 @@ module Transformer_top #(
     ,   .in_data            (	NORM_isif_data_dout   )
 
     ,   .output_ready		(	NORM_isif_read        )
-    ,   .out_data			(	NORM_osif_data_din    )
+    ,   .out_data			(	NORM_out16            )
 	,	.out_last   		(   NORM_osif_last_din    )
     ,   .out_valid			(	NORM_osif_write       )
     );		 
@@ -353,7 +360,7 @@ module Transformer_top #(
         ,	.hw_ready	    (    SOFTMAX_isif_read         )
         ,	.out_ready	    (    SOFTMAX_osif_full_n      )
         ,	.valid_out		(    SOFTMAX_osif_write       )
-        ,	.SOFT_OUT	    (    SOFTMAX_osif_data_din    )
+        ,	.SOFT_OUT	    (    SOFTMAX_out16            )
         ,	.osif_last_din	(    SOFTMAX_osif_last_din    )
     );
 
